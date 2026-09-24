@@ -200,3 +200,45 @@ class BudgetService:
             "budget": budget_info
         }
 
+    @measure_execution_time
+    @log_action
+    def export_csv(self, path: str, month: Optional[str] = None, from_date: Optional[str] = None, to_date: Optional[str] = None) -> None:
+        import csv
+        with open(path, 'w', encoding='utf-8', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["date", "type", "category", "amount", "memo", "tags"])
+            for tx in self.search_transactions(from_date=from_date, to_date=to_date):
+                if month and not tx.date.startswith(month): continue
+                tags_str = ",".join(tx.tags)
+                writer.writerow([tx.date, tx.type, tx.category, tx.amount, tx.memo, tags_str])
+
+    @measure_execution_time
+    @log_action
+    def import_csv(self, path: str) -> Dict[str, int]:
+        import csv
+        import os
+        if not os.path.exists(path):
+            raise NotFoundError("파일을 찾을 수 없습니다.", "정확한 경로를 입력해주세요.")
+            
+        imported = 0
+        skipped = 0
+        
+        with open(path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    date = row.get('date', '')
+                    type_str = row.get('type', '')
+                    category = row.get('category', '')
+                    amount = int(row.get('amount', 0))
+                    memo = row.get('memo', '')
+                    tags_str = row.get('tags', '')
+                    tags = [t.strip() for t in tags_str.split(',')] if tags_str else []
+                    
+                    self.add_transaction(date, type_str, category, amount, memo, tags)
+                    imported += 1
+                except Exception:
+                    skipped += 1
+                    
+        return {"imported": imported, "skipped": skipped}
+
