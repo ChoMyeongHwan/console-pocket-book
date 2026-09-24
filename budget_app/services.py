@@ -39,10 +39,13 @@ class BudgetService:
 
     def _validate_date(self, date_str: str) -> None:
         import datetime
+        import re
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+            raise ValidationError("잘못된 날짜 형식입니다.", "YYYY-MM-DD 형식으로 입력해주세요.")
         try:
             datetime.datetime.strptime(date_str, "%Y-%m-%d")
         except ValueError:
-            raise ValidationError("잘못된 날짜 형식입니다.", "YYYY-MM-DD 형식으로 입력해주세요.")
+            raise ValidationError("존재하지 않는 날짜입니다.", "유효한 날짜를 입력해주세요.")
 
     def _validate_type(self, type_str: str) -> None:
         if type_str not in ("수입", "지출"):
