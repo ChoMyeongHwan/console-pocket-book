@@ -1,0 +1,331 @@
+# 🎯 가계부 콘솔 프로그램(budget_app) 과제 평가 시연 시나리오
+
+> **안내**: 본 문서는 평가자(교수님/멘토/평가관) 앞에서 프로젝트를 직접 시연하고 설명할 때 그대로 따라 할 수 있는 **실전 시연 스크립트 및 발표 가이드**입니다.  
+> 터미널 명령어, 예상 화면 출력, 그리고 비전공자 관점에서도 당당하게 핵심을 짚을 수 있는 **추천 발표 멘트**를 단계별로 정리했습니다.
+
+---
+
+## 📋 시연 준비 및 사전 점검
+
+시연 시작 전 프로젝트 루트 폴더(`/Users/mhcho06254284/workspace/console-pocket-book`)에서 터미널을 열고 파이썬 버전을 확인합니다.
+
+```bash
+python3 --version
+# 예상 출력: Python 3.10 이상 (예: Python 3.12.x)
+```
+
+---
+
+## 🎬 10단계 실전 시연 시나리오
+
+```mermaid
+flowchart TD
+    S1["1단계: 단위 테스트 검증<br/>(100% Pass)"] --> S2["2단계: 카테고리 초기화<br/>(자동 시드 확인)"]
+    S2 --> S3["3단계: 거래 추가 및 검증<br/>(오류 힌트 & 정상 추가)"]
+    S3 --> S4["4단계: 거래 목록 스트리밍<br/>(yield 제너레이터)"]
+    S4 --> S5["5단계: 조건별 거래 검색<br/>(기간/타입/키워드)"]
+    S5 --> S6["6단계: 예산 및 월별 요약<br/>(TOP N & 사용률 분석)"]
+    S6 --> S7["7단계: 카테고리 무결성<br/>(사용 중 삭제 차단)"]
+    S7 --> S8["8단계: 거래 수정 및 삭제<br/>(원자적 파일 교체)"]
+    S8 --> S9["9단계: CSV 입출력<br/>(export / import)"]
+    S9 --> S10["10단계: 아키텍처 & 학습 가이드<br/>(docs/learning 설명)"]
+```
+
+---
+
+### Step 1. 단위 테스트(Unit Test) 100% 통과 시연
+
+가장 먼저 프로그램의 모든 핵심 기능이 테스트를 통해 안정적으로 검증되었음을 보여줍니다.
+
+* **실행 명령어**:
+  ```bash
+  python3 -m unittest discover -s tests -v
+  ```
+* **예상 화면 출력**:
+  ```text
+  test_add_transaction (test_budget_app.TestBudgetApp)
+  거래 추가 및 영문/한글 타입 지원, 최신순 정렬 검증 ... ok
+  test_budget_and_summary (test_budget_app.TestBudgetApp)
+  월별 요약 통계 계산 및 예산 초과 경고 산출 검증 ... ok
+  test_category_management (test_budget_app.TestBudgetApp)
+  카테고리 기본 생성, 추가, 중복 차단, 사용 중 카테고리 삭제 차단 검증 ... ok
+  test_csv_export_import (test_budget_app.TestBudgetApp)
+  CSV 내보내기/가져오기 왕복 검증 및 필수 조건 누락 예외 검증 ... ok
+  test_delete_transaction (test_budget_app.TestBudgetApp)
+  거래 삭제 및 존재하지 않는 ID 삭제 시 NotFoundError 발생 검증 ... ok
+  test_search_transactions (test_budget_app.TestBudgetApp)
+  키워드, 날짜 범위, 타입, 태그 조건 검색 검증 ... ok
+  test_update_transaction (test_budget_app.TestBudgetApp)
+  거래 수정 및 존재하지 않는 ID 수정 시 NotFoundError 발생 검증 ... ok
+  test_validation_errors (test_budget_app.TestBudgetApp)
+  잘못된 입력값(날짜 형식 오류, 유효하지 않은 타입, 음수 금액, 미등록 카테고리) 예외 검증 ... ok
+
+  ----------------------------------------------------------------------
+  Ran 8 tests in 0.026s
+
+  OK
+  ```
+* **🗣️ 발표 멘트**:
+  > *"가장 먼저 작성된 단위 테스트 8종을 실행하겠습니다. 외부 라이브러리 없이 순수 파이썬 `unittest`로 작성되었으며, 격리된 임시 폴더에서 100% 정상 통과함을 확인할 수 있습니다."*
+
+---
+
+### Step 2. 초기 실행 및 기본 카테고리 자동 시드 확인
+
+초기 데이터 파일이 없는 상태에서 프로그램이 알아서 안전하게 기본 데이터를 세팅하는지 보여줍니다.
+
+* **실행 명령어**:
+  ```bash
+  python3 -m budget_app category list
+  ```
+* **예상 화면 출력**:
+  ```text
+  - food
+  - transport
+  - living
+  - salary
+  - entertainment
+  - shopping
+  - medical
+  - etc
+  ```
+* **🗣️ 발표 멘트**:
+  > *"최초 실행 시 `data/` 디렉터리와 `categories.jsonl`이 없더라도, 저장소가 자동으로 기본 필수 카테고리 8종을 안전하게 시드(Seed) 생성합니다."*
+
+---
+
+### Step 3. 거래 추가(add) - 대화형 입력 및 오류 처리 시연
+
+PDF 10페이지에 명시된 **스택트레이스 숨김 + 원인과 힌트 제공**을 먼저 보여준 뒤, 정상 등록을 진행합니다.
+
+#### 3-1. 잘못된 날짜 입력 시연 (예외 처리 & UX 검증)
+* **실행 명령어**:
+  ```bash
+  python3 -m budget_app add
+  ```
+* **입력값**: `2024-13-40` 입력 후 엔터
+* **예상 화면 출력**:
+  ```text
+  날짜(YYYY-MM-DD): 2024-13-40
+  [오류] 날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).
+  [힌트] 예: 2024-01-15
+  ```
+* **🗣️ 발표 멘트**:
+  > *"보시는 것처럼 사용자가 2024-13-40 같은 잘못된 날짜를 입력하면, 파이썬의 긴 빨간색 스택트레이스를 노출하지 않고 `@handle_cli_error` 데코레이터가 가로채어 명확한 원인과 해결 힌트를 제시하며 exit code 1로 안전 종료합니다."*
+
+#### 3-2. 정상 거래 등록 (지출 1건, 수입 1건)
+* **실행 명령어 1 (지출 등록)**:
+  ```bash
+  python3 -m budget_app add
+  ```
+  * 날짜(YYYY-MM-DD): `2024-01-15`
+  * 타입(income/expense): `expense`
+  * 카테고리: `food`
+  * 금액(양수): `15000`
+  * 메모(선택): `점심 식사`
+  * 태그(쉼표로 구분, 없으면 엔터): `meal`
+  * **출력**: `[저장 완료] id=TX-XXXXXX` *(생성된 ID 메모)*
+
+* **실행 명령어 2 (수입 등록)**:
+  ```bash
+  python3 -m budget_app add
+  ```
+  * 날짜(YYYY-MM-DD): `2024-01-10`
+  * 타입(income/expense): `income`
+  * 카테고리: `salary`
+  * 금액(양수): `3000000`
+  * 메모(선택): `1월 급여`
+  * 태그(쉼표로 구분, 없으면 엔터): `급여`
+  * **출력**: `[저장 완료] id=TX-YYYYYY`
+
+---
+
+### Step 4. 최신순 거래 목록 조회 (list) 및 스트리밍 확인
+
+* **실행 명령어**:
+  ```bash
+  python3 -m budget_app list --limit 3
+  ```
+* **예상 화면 출력**:
+  ```text
+  TX-XXXXXX | 2024-01-15 | expense | food | 15000 | 점심 식사
+  TX-YYYYYY | 2024-01-10 | income | salary | 3000000 | 1월 급여
+  ```
+* **🗣️ 발표 멘트**:
+  > *"`list` 명령어는 최신 날짜순으로 정렬하여 출력합니다. 내부적으로 `yield` 기반 제너레이터 스트리밍을 채택하여, 수만 건의 거래 데이터가 쌓여 있어도 메모리를 O(1)로 유지하면서 1개씩 순차 출력합니다."*
+
+---
+
+### Step 5. 다중 조건 거래 검색 (search)
+
+다양한 필터 옵션(`--category`, `--type`, `--q`, `--tag`)을 조합하여 검색합니다.
+
+* **카테고리 및 키워드 검색**:
+  ```bash
+  python3 -m budget_app search --category food --q 점심
+  ```
+* **수입 내역만 검색**:
+  ```bash
+  python3 -m budget_app search --type income
+  ```
+* **🗣️ 발표 멘트**:
+  > *"`search` 명령어는 리눅스 표준 옵션(`--`)을 통해 기간, 카테고리, 수입/지출 유형, 메모 키워드, 태그 등을 복합적으로 필터링할 수 있습니다."*
+
+---
+
+### Step 6. 예산 설정 및 월별 요약 (budget & summary)
+
+* **6-1. 목표 예산 설정**:
+  ```bash
+  python3 -m budget_app budget set --month 2024-01 --amount 500000
+  ```
+  * 출력: `[저장 완료] 2024-01 예산 500000원`
+
+* **6-2. 월별 재정 요약 리포트**:
+  ```bash
+  python3 -m budget_app summary --month 2024-01 --top 3
+  ```
+* **예상 화면 출력**:
+  ```text
+  총 수입: 3000000원
+  총 지출: 15000원
+  잔액: 2985000원
+  예산: 500000원 (사용률 3.0%)
+
+  지출 TOP 1
+  1) food 15000원
+  ```
+
+* **6-3. 데이터가 없는 월 조회 (예외 상황 처리)**:
+  ```bash
+  python3 -m budget_app summary --month 2024-02
+  ```
+  * 출력: `데이터 없음`
+
+* **🗣️ 발표 멘트**:
+  > *"`summary`는 해당 월의 총수입, 총지출, 잔액을 계산하고 지출 상위 TOP N 카테고리를 집계합니다. 앞서 설정한 예산 대비 사용률(%)을 산출하며, 예산 초과 시에는 경고 문구를 표시합니다. 거래가 없는 달은 '데이터 없음'을 명확히 출력합니다."*
+
+---
+
+### Step 7. 카테고리 관리 및 참조 무결성 보호 시연
+
+데이터의 안전성을 위해 거래 내역이 있는 카테고리는 함부로 삭제되지 않아야 합니다.
+
+* **7-1. 신규 카테고리 추가**:
+  ```bash
+  python3 -m budget_app category add travel
+  ```
+  * 출력: `[저장 완료] category=travel`
+
+* **7-2. 기본 카테고리 삭제 시도 (차단 확인)**:
+  ```bash
+  python3 -m budget_app category remove food
+  ```
+  * 출력:
+    ```text
+    [오류] 기본 카테고리 'food'는 삭제할 수 없습니다.
+    [힌트] 사용자가 직접 추가한 카테고리만 삭제 가능합니다.
+    ```
+
+* **7-3. 사용 중인 카테고리 삭제 시도 (참조 무결성 차단 확인)**:
+  ```bash
+  python3 -m budget_app category remove salary
+  ```
+  * 출력:
+    ```text
+    [오류] 'salary' 카테고리를 사용하는 거래 내역이 존재합니다.
+    [힌트] 해당 카테고리의 거래 내역을 삭제하거나 수정한 후 다시 시도하세요.
+    ```
+
+* **7-4. 미사용 신규 카테고리 정상 삭제**:
+  ```bash
+  python3 -m budget_app category remove travel
+  ```
+  * 출력: `[삭제 완료] category=travel`
+
+* **🗣️ 발표 멘트**:
+  > *"가계부 데이터의 무결성을 보호하기 위해 시스템 기본 카테고리나 현재 거래 내역에 등록되어 있는 카테고리는 삭제를 원천 차단하도록 안전장치를 구현했습니다."*
+
+---
+
+### Step 8. 거래 수정 및 삭제 (update & delete)
+
+* **8-1. 거래 금액 및 메모 수정**:
+  *(Step 3에서 생성된 ID TX-XXXXXX 사용)*
+  ```bash
+  python3 -m budget_app update --id TX-XXXXXX --amount 18000 --memo "저녁 식사로 변경"
+  ```
+  * 출력: `[수정 완료] id=TX-XXXXXX`
+
+* **8-2. 수정 결과 확인**:
+  ```bash
+  python3 -m budget_app list --limit 1
+  ```
+  * 금액이 18000원으로 변경된 내역 확인
+
+* **8-3. 거래 삭제**:
+  ```bash
+  python3 -m budget_app delete --id TX-XXXXXX
+  ```
+  * 출력: `[삭제 완료] id=TX-XXXXXX`
+
+* **🗣️ 발표 멘트**:
+  > *"`update`와 `delete` 동작 시 파일 손상을 방지하기 위해, 임시 파일에 새 상태를 먼저 기록한 뒤 원자적 교체(`atomic replace`)를 적용하여 안전하게 데이터를 갱신합니다."*
+
+---
+
+### Step 9. CSV 내보내기(export) 및 가져오기(import)
+
+과제 명세서의 고정 스키마(`date,type,category,amount,memo,tags`)를 준수하는지 확인합니다.
+
+* **9-1. CSV 내보내기**:
+  ```bash
+  python3 -m budget_app export --out backup_202401.csv --month 2024-01
+  ```
+  * 출력: `[완료] backup_202401.csv (1 records)`
+
+* **9-2. 생성된 CSV 파일 내용 검증**:
+  ```bash
+  cat backup_202401.csv
+  ```
+  * 출력:
+    ```text
+    date,type,category,amount,memo,tags
+    2024-01-10,income,salary,3000000,1월 급여,급여
+    ```
+
+* **9-3. CSV 가져오기**:
+  ```bash
+  python3 -m budget_app import --from backup_202401.csv
+  ```
+  * 출력: `[완료] imported=1, skipped=0`
+
+* **🗣️ 발표 멘트**:
+  > *"외부 시스템과 데이터를 주고받기 위한 CSV 표준 스키마를 만족하며, 누락되거나 오류가 있는 행은 skipped 건수로 정확히 집계하여 안전하게 가져옵니다."*
+
+---
+
+### Step 10. 아키텍처 및 탑다운 학습 가이드 소개
+
+마지막으로 코드 품질과 학습 산출물에 대해 설명하고 시연을 마무리합니다.
+
+* **🗣️ 발표 멘트**:
+  > *"본 프로젝트는 단순히 기능만 구현한 것이 아니라, 구현 후 동작 원리를 체계적으로 학습할 수 있도록 `docs/learning/` 폴더에 5대 핵심 개념 학습 가이드를 완비했습니다:*
+  > 1. *`01_layered_architecture.md`: CLI, Service, Repository, Model 계층 분리와 단일 책임 원칙(SRP)*
+  > 2. *`02_generator_streaming.md`: `yield` 제너레이터를 활용한 대용량 파일 스트리밍과 O(1) 메모리 최적화*
+  > 3. *`03_decorators.md`: `@handle_cli_error` 등 공통 관심사 분리와 `@functools.wraps`의 원리*
+  > 4. *`04_type_hints_and_dataclass.md`: 타입 힌트와 `dataclass`를 통한 견고한 데이터 계약(Contract) 설계*
+  > 5. *`05_error_handling_and_cli.md`: 사용자 경험 중심 CLI 에러 핸들링과 POSIX 종료 코드 규격*
+  >
+  > *또한 각 소스코드 파일마다 비전공자도 쉽게 이해할 수 있도록 파이썬 핵심 문법 설명 주석을 상세히 작성해 두었습니다."*
+
+---
+
+## 💡 평가자 단골 질문(Q&A) 대비 가이드
+
+| 예상 질문 | 핵심 답변 키포인트 |
+|---|---|
+| **Q1. 대용량 파일 처리 시 제너레이터(`yield`)를 쓴 이유는 무엇인가요?** | 일반 `f.readlines()`는 수백만 건의 데이터를 RAM에 한꺼번에 올려 메모리 초과(OOM)가 발생할 수 있습니다. 반면 `yield`는 호출자가 요청할 때 1줄씩만 메모리에 올려 반환하므로 메모리 사용량이 항상 일정(O(1))하게 유지됩니다. |
+| **Q2. 데코레이터(`@handle_cli_error`)를 왜 사용했나요?** | 모든 CLI 커맨드마다 `try-except`를 반복해서 작성하면 코드가 지저분해집니다. 공통 예외 처리 로직을 데코레이터로 분리하여 코드 중복을 없애고 비즈니스 로직에만 집중할 수 있게 했습니다. |
+| **Q3. dataclass를 사용한 이유와 딕셔너리와의 차이는 무엇인가요?** | 일반 딕셔너리는 오타(`tx["amont"]`)가 나도 런타임에 에러를 찾기 어렵지만, `dataclass`는 필드명과 타입이 명확히 고정되어 IDE 자동완성을 지원하고 잘못된 데이터 전달을 방지하는 강력한 계약(Contract) 역할을 합니다. |
+| **Q4. 외부 라이브러리(pandas, click 등)를 전혀 쓰지 않은 이유는 무엇인가요?** | 과제 제약조건에 맞춰 파이썬 표준 라이브러리(`argparse`, `csv`, `json`, `dataclasses`, `unittest` 등)의 깊이 있는 이해와 활용 역량을 증명하기 위해 외부 의존성을 일체 배제했습니다. |
