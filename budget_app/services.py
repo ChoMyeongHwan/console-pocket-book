@@ -78,3 +78,56 @@ class BudgetService:
                 break
             yield tx
 
+    def search_transactions(self, from_date: Optional[str] = None, to_date: Optional[str] = None, 
+                            category: Optional[str] = None, type: Optional[str] = None, 
+                            q: Optional[str] = None, tag: Optional[str] = None) -> Generator[Transaction, None, None]:
+        if from_date: self._validate_date(from_date)
+        if to_date: self._validate_date(to_date)
+            
+        for tx in self.repo.get_transactions():
+            if from_date and tx.date < from_date: continue
+            if to_date and tx.date > to_date: continue
+            if category and tx.category != category: continue
+            if type and tx.type != type: continue
+            if q and q.lower() not in tx.memo.lower(): continue
+            if tag and tag not in tx.tags: continue
+            yield tx
+            
+    @measure_execution_time
+    @log_action
+    def update_transaction(self, id: str, date: Optional[str] = None, type: Optional[str] = None, 
+                           category: Optional[str] = None, amount: Optional[int] = None, 
+                           memo: Optional[str] = None, tags: Optional[List[str]] = None) -> Transaction:
+        transactions = list(self.repo.get_transactions())
+        target = next((tx for tx in transactions if tx.id == id), None)
+        if not target:
+            raise NotFoundError("해당 거래를 찾을 수 없습니다.", "정확한 ID를 입력해주세요.")
+            
+        if date: 
+            self._validate_date(date)
+            target.date = date
+        if type: 
+            self._validate_type(type)
+            target.type = type
+        if category: 
+            self._validate_category(category)
+            target.category = category
+        if amount is not None: 
+            self._validate_amount(amount)
+            target.amount = amount
+        if memo is not None: target.memo = memo
+        if tags is not None: target.tags = tags
+            
+        self.repo.save_transactions(transactions)
+        return target
+        
+    @measure_execution_time
+    @log_action
+    def delete_transaction(self, id: str) -> None:
+        transactions = list(self.repo.get_transactions())
+        initial_len = len(transactions)
+        transactions = [tx for tx in transactions if tx.id != id]
+        if len(transactions) == initial_len:
+            raise NotFoundError("해당 거래를 찾을 수 없습니다.", "정확한 ID를 입력해주세요.")
+        self.repo.save_transactions(transactions)
+
