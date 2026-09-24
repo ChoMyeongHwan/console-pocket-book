@@ -131,3 +131,72 @@ class BudgetService:
             raise NotFoundError("해당 거래를 찾을 수 없습니다.", "정확한 ID를 입력해주세요.")
         self.repo.save_transactions(transactions)
 
+    @measure_execution_time
+    @log_action
+    def set_budget(self, month: str, amount: int) -> Budget:
+        import re
+        if not re.match(r"^\d{4}-\d{2}$", month):
+            raise ValidationError("잘못된 월 형식입니다.", "YYYY-MM 형식으로 입력해주세요.")
+        if amount <= 0:
+            raise ValidationError("예산 금액은 0보다 커야 합니다.", "양수로 입력해주세요.")
+            
+        budgets = list(self.repo.get_budgets())
+        target = next((b for b in budgets if b.month == month), None)
+        if target:
+            target.amount = amount
+        else:
+            target = Budget(month=month, amount=amount)
+            budgets.append(target)
+        self.repo.save_budgets(budgets)
+        return target
+
+    def get_budget(self, month: str) -> Optional[Budget]:
+        return next((b for b in self.repo.get_budgets() if b.month == month), None)
+
+    @measure_execution_time
+    def get_monthly_summary(self, month: str, top_n: int = 3) -> Dict[str, Any]:
+        import re
+        from collections import defaultdict
+        if not re.match(r"^\d{4}-\d{2}$", month):
+            raise ValidationError("잘못된 월 형식입니다.", "YYYY-MM 형식으로 입력해주세요.")
+            
+        total_income = 0
+        total_expense = 0
+        category_expenses = defaultdict(int)
+        
+        has_data = False
+        for tx in self.repo.get_transactions():
+            if tx.date.startswith(month):
+                has_data = True
+                if tx.type == "수입":
+                    total_income += tx.amount
+                elif tx.type == "지출":
+                    total_expense += tx.amount
+                    category_expenses[tx.category] += tx.amount
+                    
+        if not has_data:
+            return {"status": "데이터 없음"}
+            
+        balance = total_income - total_expense
+        top_categories = sorted(category_expenses.items(), key=lambda x: x[1], reverse=True)[:top_n]
+        
+        budget = self.get_budget(month)
+        budget_info = None
+        if budget:
+            usage_rate = (total_expense / budget.amount) * 100 if budget.amount > 0 else 0
+            warning = usage_rate > 100
+            budget_info = {
+                "amount": budget.amount,
+                "usage_rate": usage_rate,
+                "warning": warning
+            }
+            
+        return {
+            "status": "success",
+            "total_income": total_income,
+            "total_expense": total_expense,
+            "balance": balance,
+            "top_categories": top_categories,
+            "budget": budget_info
+        }
+
