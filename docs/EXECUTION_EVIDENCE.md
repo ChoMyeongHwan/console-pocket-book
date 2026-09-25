@@ -1,6 +1,6 @@
 # 📸 가계부 프로그램(budget_app) 기능별 1:1 실행 증거 문서 (Execution Evidence)
 
-> **문서 개요**: 본 문서는 네이토 사전평가 항목 #1(기능 실행 증거 부족)을 보완하기 위해, `budget_app`의 10대 핵심 기능(`add`, `list`, `search`, `summary`, `budget`, `category`, `update`, `delete`, `export`, `import`)과 예외 처리 동작을 **실제 터미널 실행 로그 및 단일 명령 입출력 캡처**로 1:1 입증하는 공식 증빙 자료입니다.
+> **문서 개요**: 본 문서는 네이토 사전평가 항목 #1(기능 실행 증거 부족)을 보완하기 위해, `budget_app`의 10대 핵심 기능(`add`, `list`, `search`, `summary`, `budget`, `category`, `update`, `delete`, `export`, `import`)과 예외 처리 동작을 **실제 터미널 실행 로그 및 단일 명령 입출력 캡처** 로 1:1 입증하는 공식 증빙 자료입니다.
 
 ---
 

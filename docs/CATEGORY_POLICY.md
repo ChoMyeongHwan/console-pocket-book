@@ -10,7 +10,7 @@
 
 | 구분 | 대상 카테고리 | 특징 및 권한 |
 |---|---|---|
-| **시스템 기본 카테고리 (Default Categories)** | `food`, `transport`, `living`, `salary`, `entertainment`, `shopping`, `medical`, `etc` (총 8종) | 최초 실행 시 `./data/categories.jsonl`에 자동 시드되며, 시스템 필수 항목으로 **삭제가 절대 불가**합니다. |
+| **시스템 기본 카테고리 (Default Categories)** | `food`, `transport`, `living`, `salary`, `entertainment`, `shopping`, `medical`, `etc` (총 8종) | 최초 실행 시 `./data/categories.jsonl`에 자동 시드되며, 시스템 필수 항목으로 **삭제가 절대 불가** 합니다. |
 | **사용자 정의 카테고리 (Custom Categories)** | 사용자가 `category add <name>`으로 직접 생성한 카테고리 | 자유롭게 추가 가능하며, 아래의 무결성 검증 정책을 통과할 경우에만 삭제가 허용됩니다. |
 
 ---

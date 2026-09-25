@@ -28,7 +28,7 @@ class Transaction:
     memo: str = ""
     tags: List[str] = None
 ```
-- IDE(PyCharm, VSCode)에서 **자동완성**을 완벽하게 지원합니다.
+- IDE(PyCharm, VSCode)에서 **자동완성** 을 완벽하게 지원합니다.
 - `Transaction.amount`처럼 객체의 속성으로 안전하게 접근할 수 있습니다.
 - `__init__`, `__repr__`, `__eq__` 등의 매직 메서드를 자동으로 생성해 주어 코드가 간결해집니다.
 

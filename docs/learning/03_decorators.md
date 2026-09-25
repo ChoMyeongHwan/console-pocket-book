@@ -46,7 +46,7 @@ def add_transaction(tx):
 
 ## 4. 개발용/운영용 디버그 토글 (PASS #6 보완)
 
-기본적으로는 일반 사용자를 위해 스택트레이스를 숨기지만, 개발자가 버그를 분석할 수 있도록 **디버그 모드 토글**을 지원합니다:
+기본적으로는 일반 사용자를 위해 스택트레이스를 숨기지만, 개발자가 버그를 분석할 수 있도록 **디버그 모드 토글** 을 지원합니다:
 - CLI 옵션: `python -m budget_app --debug <command>`
 - 환경변수: `export BUDGET_APP_DEBUG=1`
 - 디버그 모드 활성화 시: `@handle_cli_error`가 예외 클래스명, exit code, 그리고 파이썬 내부 스택트레이스(`traceback.print_exc()`)를 추가로 출력합니다.

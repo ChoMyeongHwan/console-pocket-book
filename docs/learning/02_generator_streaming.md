@@ -2,7 +2,7 @@
 
 ## 1. 개요
 대용량 데이터를 다루는 CLI 애플리케이션에서는 모든 데이터를 메모리에 한 번에 올리는 방식(`readlines()` 등)은 메모리 초과(OOM) 오류를 발생시킬 수 있습니다.
-`budget_app`에서는 Python의 `yield` 제너레이터를 활용하여 **스트리밍(Streaming) 방식**으로 데이터를 처리하며, 이에 최적화된 **JSONL(JSON Lines)** 포맷을 영구 저장소로 채택했습니다.
+`budget_app`에서는 Python의 `yield` 제너레이터를 활용하여 **스트리밍(Streaming) 방식** 으로 데이터를 처리하며, 이에 최적화된 **JSONL(JSON Lines)** 포맷을 영구 저장소로 채택했습니다.
 
 ---
 
@@ -73,7 +73,7 @@ flowchart LR
 2. **스트리밍 원자적 갱신**: 거래 수정/삭제 시 1건씩 스트리밍 읽고 교체 (`repo.stream_rewrite_transactions`)
 3. **외부 병합 정렬(External Merge Sort)**: 대용량 데이터 정렬 시 메모리 폭증 없이 `O(K)` 메모리로 정렬 스트리밍 (`sort_utils.external_merge_sort`)
 
-상세 분석 및 월별 파티셔닝(Sharding) 로드맵은 [**docs/LARGE_SCALE_ANALYSIS.md**](../LARGE_SCALE_ANALYSIS.md)에 상세히 기술되어 있습니다.
+상세 분석 및 월별 파티셔닝(Sharding) 로드맵은 [**docs/LARGE_SCALE_ANALYSIS.md**](../LARGE_SCALE_ANALYSIS.md) 에 상세히 기술되어 있습니다.
 
 ---
 
