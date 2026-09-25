@@ -16,9 +16,10 @@
      함수의 인자(`date="...", amount=1000`)로 자동으로 풀어헤쳐 전달하는 편리한 문법입니다.
 4. 리스트 컴프리헨션 (List Comprehension):
    - `[t.__dict__ for t in transactions]`는 for 루프를 한 줄로 축약하여 새로운 리스트를 생성하는 파이썬 고유의 우아한 문법입니다.
-5. 원자적 파일 교체 (Atomic File Replace):
+5. 원자적 파일 교체 (Atomic File Replace) 및 롤백 정책:
    - 원본 파일에 직접 쓰기(`write`)를 진행하다가 프로그램이 강제 종료되면 원본 파일이 손상(Corrupted)됩니다.
    - `tempfile.mkstemp`로 임시 파일에 데이터를 완벽히 기록한 뒤, OS 수준의 원자적 연산인 `os.replace`로 순식간에 이름을 변경하여 데이터 무결성을 보장합니다.
+   - 쓰기 실패 시 임시 파일을 즉시 제거(unlink)하고 이전 원본 파일을 100% 보존하는 자동 롤백 정책이 적용됩니다.
 """
 
 import os
@@ -26,6 +27,7 @@ import json
 import tempfile
 from typing import Generator, List, Any, Dict
 from budget_app.models import Transaction, Category, Budget
+from budget_app.exceptions import DataStoreError
 
 # 프로그램 최초 실행 시 자동 생성할 기본 카테고리 목록
 DEFAULT_CATEGORIES = [
@@ -48,12 +50,12 @@ class Repository:
         self._init_dir()
         self._init_categories()
         
-    def _init_dir(self):
+    def _init_dir(self) -> None:
         """데이터 저장 폴더가 없으면 새로 생성"""
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
             
-    def _init_categories(self):
+    def _init_categories(self) -> None:
         """카테고리 파일이 없으면 기본 8개 카테고리를 영구 저장소에 자동 등록"""
         if not os.path.exists(self.categories_path):
             self.save_categories([Category(name=c, is_default=True) for c in DEFAULT_CATEGORIES])
@@ -62,6 +64,12 @@ class Repository:
         """
         JSONL 파일을 한 줄씩 읽어 파싱하는 yield 기반 제너레이터 함수.
         대용량 파일도 전체를 메모리에 올리지 않고 한 줄씩 스트리밍 처리합니다.
+
+        [파일 닫힘 보장 및 소비자 가이드]:
+        - `with open(...)` 컨텍스트 매니저를 통해 순회가 완료되거나 루프 중단(break), 
+          예외 발생 시에도 GeneratorExit가 처리되며 파일 디스크립터가 즉시 안전하게 닫힙니다.
+        - 주의: 대용량 데이터에서 `list(get_transactions())`처럼 전체 리스트화하면 O(1) 메모리 이점이
+          상실되므로, 필터링이나 집계 시 제너레이터 스트림 상태 그대로 순회하는 것을 권장합니다.
         """
         if not os.path.exists(path):
             return
@@ -72,26 +80,38 @@ class Repository:
                     # JSON 문자열을 파이썬 딕셔너리로 변환 후 호출자에게 1개씩 양보(yield)
                     yield json.loads(line)
 
-    def _write_jsonl_atomic(self, path: str, items: List[Dict[str, Any]]):
+    def _write_jsonl_atomic(self, path: str, items: List[Dict[str, Any]]) -> None:
         """
-        데이터 안정성을 위한 원자적 파일 쓰기:
-        임시 파일에 모든 데이터를 기록한 뒤 원본 파일로 원자적 교체(rename)를 수행합니다.
+        데이터 안정성을 위한 원자적 파일 쓰기 및 롤백 정책:
+        1. 동일 디렉터리 내에 안전한 임시 파일 생성
+        2. 임시 파일에 모든 데이터를 직렬화 기록
+        3. 쓰기 도중 예외 발생 시 임시 파일 즉시 제거(unlink) 및 원본 파일 100% 보존 (자동 롤백)
+        4. 쓰기 성공 시 os.replace(원자적 연산)로 무중단 원자적 교체
         """
-        # 동일 디렉터리 내에 안전한 임시 파일 생성
-        fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path), text=True)
-        with os.fdopen(fd, 'w', encoding='utf-8') as f:
-            for item in items:
-                # 딕셔너리를 JSON 문자열로 직렬화하여 줄 단위 기록
-                f.write(json.dumps(item, ensure_ascii=False) + "\n")
-        # OS 수준의 원자적 파일 교체 (중단 없는 안전성 보장)
-        os.replace(temp_path, path)
+        temp_path = None
+        try:
+            fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path), text=True)
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                for item in items:
+                    f.write(json.dumps(item, ensure_ascii=False) + "\n")
+            os.replace(temp_path, path)
+        except Exception as e:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+            raise DataStoreError(
+                f"파일 저장 중 오류가 발생했습니다: {str(e)}",
+                "디스크 여유 공간 및 쓰기 권한을 확인하세요."
+            )
         
     def get_transactions(self) -> Generator[Transaction, None, None]:
         """저장된 거래 내역을 Transaction 객체 스트림으로 반환"""
         for data in self._read_jsonl(self.transactions_path):
             yield Transaction(**data)
             
-    def save_transactions(self, transactions: List[Transaction]):
+    def save_transactions(self, transactions: List[Transaction]) -> None:
         """전체 거래 목록을 JSONL 파일에 원자적으로 저장"""
         self._write_jsonl_atomic(self.transactions_path, [t.__dict__ for t in transactions])
         
@@ -100,7 +120,7 @@ class Repository:
         for data in self._read_jsonl(self.categories_path):
             yield Category(**data)
             
-    def save_categories(self, categories: List[Category]):
+    def save_categories(self, categories: List[Category]) -> None:
         """카테고리 목록을 JSONL 파일에 원자적으로 저장"""
         self._write_jsonl_atomic(self.categories_path, [c.__dict__ for c in categories])
         
@@ -109,6 +129,6 @@ class Repository:
         for data in self._read_jsonl(self.budgets_path):
             yield Budget(**data)
             
-    def save_budgets(self, budgets: List[Budget]):
+    def save_budgets(self, budgets: List[Budget]) -> None:
         """예산 목록을 JSONL 파일에 원자적으로 저장"""
         self._write_jsonl_atomic(self.budgets_path, [b.__dict__ for b in budgets])

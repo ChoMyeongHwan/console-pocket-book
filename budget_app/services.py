@@ -1,4 +1,4 @@
-"""
+r"""
 [비즈니스 로직 및 서비스 모듈 (services.py)]
 
 💡 파이썬 기초 문법 및 비즈니스 설계 설명:
@@ -21,6 +21,8 @@
      각 항목의 1번째 원소(금액)를 기준으로 내림차순(`reverse=True`) 정렬하여 상위(TOP) 카테고리를 추출합니다.
 6. 표준 csv 모듈 (csv.writer, csv.DictReader):
    - 외부 무거운 라이브러리(pandas 등) 없이 파이썬 표준 라이브러리만으로 CSV 헤더 작성과 딕셔너리 기반 행 파싱을 안전하게 수행합니다.
+7. 부분 임포트(Partial Import) 및 오류 격리:
+   - CSV 가져오기 시 한 행의 오류로 전체 작업이 실패하지 않도록 Best-Effort 전략을 취하며, 스킵된 행 번호와 구체적 실패 사유를 리포트로 수집합니다.
 """
 
 import csv
@@ -39,7 +41,7 @@ class BudgetService:
     """
     가계부의 10대 핵심 비즈니스 로직(거래 추가, 조회, 검색, 수정, 삭제, 요약, 예산, 카테고리, CSV)을 총괄하는 서비스 클래스
     """
-    def __init__(self, repository: Repository):
+    def __init__(self, repository: Repository) -> None:
         self.repo = repository
 
     @measure_execution_time
@@ -62,11 +64,13 @@ class BudgetService:
 
     @measure_execution_time
     @log_action
-    def remove_category(self, name: str) -> None:
+    def remove_category(self, name: str, replace_with: Optional[str] = None) -> None:
         """
-        카테고리 삭제:
+        카테고리 삭제 정책:
         1. 기본 카테고리는 삭제 불가
-        2. 거래 내역에서 사용 중인 카테고리는 데이터 보호를 위해 삭제 차단
+        2. 거래 내역에서 사용 중인 카테고리인 경우:
+           - replace_with(대체 카테고리) 지정 시: 기존 거래의 카테고리를 replace_with로 일괄 마이그레이션 후 안전하게 삭제
+           - replace_with 미지정 시: 데이터 보호(참조 무결성)를 위해 삭제 차단 및 안내 출력
         """
         name = name.strip()
         categories = list(self.repo.get_categories())
@@ -76,12 +80,23 @@ class BudgetService:
         if target.is_default:
             raise ValidationError(f"기본 카테고리 '{name}'는 삭제할 수 없습니다.", "사용자가 직접 추가한 카테고리만 삭제 가능합니다.")
         
-        # 참조 무결성 검사: 삭제 대상 카테고리를 참조하는 거래가 있는지 확인
-        for tx in self.repo.get_transactions():
-            if tx.category == name:
+        # 참조하는 거래 내역 검사
+        referencing_txs = [tx for tx in self.repo.get_transactions() if tx.category == name]
+        if referencing_txs:
+            if replace_with:
+                replace_cat = next((c for c in categories if c.name == replace_with), None)
+                if not replace_cat:
+                    raise NotFoundError(f"대체 대상 카테고리 '{replace_with}'가 존재하지 않습니다.", "존재하는 카테고리를 지정하세요.")
+                # 대체 카테고리로 일괄 마이그레이션
+                all_txs = list(self.repo.get_transactions())
+                for tx in all_txs:
+                    if tx.category == name:
+                        tx.category = replace_with
+                self.repo.save_transactions(all_txs)
+            else:
                 raise ValidationError(
-                    f"'{name}' 카테고리를 사용하는 거래 내역이 존재합니다.",
-                    "해당 카테고리의 거래 내역을 삭제하거나 수정한 후 다시 시도하세요."
+                    f"'{name}' 카테고리를 사용하는 거래 내역이 {len(referencing_txs)}건 존재합니다.",
+                    "해당 카테고리의 거래 내역을 삭제/수정하거나, --replace-with 옵션으로 대체 카테고리를 지정하세요."
                 )
                 
         categories = [c for c in categories if c.name != name]
@@ -233,12 +248,12 @@ class BudgetService:
         return next((b for b in self.repo.get_budgets() if b.month == month), None)
 
     @measure_execution_time
-    def get_monthly_summary(self, month: str, top_n: int = 3) -> Dict[str, Any]:
+    def get_monthly_summary(self, month: str, top_n: int = 3, alert_threshold: float = 100.0) -> Dict[str, Any]:
         """
         월별 재정 요약 통계 계산:
         - 총 수입, 총 지출, 잔액 계산
         - 카테고리별 지출 상위 TOP N 집계
-        - 설정된 예산이 있는 경우 사용률(%) 및 예산 초과 경고 산출
+        - 설정된 예산이 있는 경우 사용률(%) 및 다단계 알림 레벨(NORMAL, CAUTION, DANGER) 산출
         """
         if not re.match(r"^\d{4}-\d{2}$", month):
             raise ValidationError("잘못된 월 형식입니다 (YYYY-MM).", "예: 2024-01")
@@ -265,16 +280,24 @@ class BudgetService:
         # 지출 금액이 큰 순서대로 상위 N개 카테고리 추출
         top_categories = sorted(category_expenses.items(), key=lambda x: x[1], reverse=True)[:top_n]
         
-        # 예산 비교 분석
+        # 예산 비교 분석 및 다단계 알림 산출
         budget = self.get_budget(month)
         budget_info = None
         if budget:
             usage_rate = (total_expense / budget.amount) * 100 if budget.amount > 0 else 0
-            warning = usage_rate > 100
+            if usage_rate > alert_threshold:
+                alert_level = "DANGER"  # 예산 초과
+            elif usage_rate >= 80.0:
+                alert_level = "CAUTION" # 예산 임박 (80% 이상)
+            else:
+                alert_level = "NORMAL"  # 예산 정상 범위
+                
             budget_info = {
                 "amount": budget.amount,
                 "usage_rate": usage_rate,
-                "warning": warning
+                "warning": usage_rate > alert_threshold,
+                "alert_level": alert_level,
+                "threshold": alert_threshold
             }
             
         return {
@@ -318,32 +341,50 @@ class BudgetService:
 
     @measure_execution_time
     @log_action
-    def import_csv(self, path: str) -> Dict[str, int]:
+    def import_csv(self, path: str) -> Dict[str, Any]:
         """
         외부 CSV 파일로부터 거래 내역을 한 줄씩 읽어 일괄 등록.
-        형식 오류 행은 건너뛰고(skip) 성공 건수와 실패 건수를 집계하여 반환
+        [부분 임포트(Partial Import) 정책]:
+        - 형식 오류 행이 발견되어도 전체 트랜잭션을 롤백하지 않고, 유효한 행은 등록하고 오류 행만 스킵
+        - 스킵된 행 번호, 필드값, 구체적 원인(날짜 오류, 금액 음수, 미등록 카테고리 등)을 수집하여 리포트로 반환
         """
         if not os.path.exists(path):
             raise NotFoundError(f"파일을 찾을 수 없습니다: {path}", "가져올 CSV 파일의 경로를 다시 확인해주세요.")
             
         imported = 0
         skipped = 0
+        skipped_details: List[Dict[str, Any]] = []
         
         with open(path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
+            line_no = 1  # 1번 행은 헤더
             for row in reader:
+                line_no += 1
                 try:
                     date = (row.get('date') or '').strip()
                     type_str = (row.get('type') or '').strip()
                     category = (row.get('category') or '').strip()
-                    amount_val = int((row.get('amount') or '0').strip())
+                    amount_raw = (row.get('amount') or '').strip()
+                    if not amount_raw.isdigit():
+                        raise ValidationError("금액은 양의 정수여야 합니다.", f"입력값: '{amount_raw}'")
+                    amount_val = int(amount_raw)
                     memo = (row.get('memo') or '').strip()
                     tags_str = (row.get('tags') or '').strip()
                     tags = [t.strip() for t in tags_str.split(',') if t.strip()] if tags_str else []
                     
                     self.add_transaction(date, type_str, category, amount_val, memo, tags)
                     imported += 1
-                except Exception:
+                except Exception as err:
                     skipped += 1
+                    err_msg = getattr(err, "message", str(err))
+                    skipped_details.append({
+                        "row": line_no,
+                        "reason": err_msg,
+                        "raw": dict(row)
+                    })
                     
-        return {"imported": imported, "skipped": skipped}
+        return {
+            "imported": imported,
+            "skipped": skipped,
+            "skipped_details": skipped_details
+        }

@@ -14,58 +14,76 @@
 4. @functools.wraps:
    - 데코레이터로 함수를 감싸면, 원본 함수의 이름(`__name__`)이나 설명 문서(`__doc__`)가 wrapper 함수로 덮어씌워져 사라집니다.
    - `@functools.wraps(func)`를 붙여주면 원본 함수의 메타데이터를 보존해 디버깅과 문서화에 문제가 생기지 않도록 해줍니다.
-5. sys.exit(0 vs 1):
-   - 운영체제(리눅스/맥/윈도우) 표준 규격(POSIX)에서 프로그램이 정상 종료되면 숫자 `0`을, 오류로 비정상 종료되면 `0이 아닌 값(예: 1)`을 반환해야 합니다.
+5. 세분화된 POSIX exit code:
+   - 운영체제 표준 규격에 따라 정상 종료는 0, 에러 발생 시 에러 성격에 따른 고유 종료 코드(1: 일반 오류, 2: 유효성 검증 오류, 3: 리소스 미존재 오류, 4: 저장소 오류)를 반환합니다.
+6. 개발용/운영용 디버그 토글:
+   - CLI 인자 `--debug` 또는 환경변수 `BUDGET_APP_DEBUG=1`을 감지하여 개발 환경에서는 상세 스택트레이스를 출력하고, 운영 환경에서는 사용자 친화적 메시지만 노출합니다.
 """
 
+import os
 import sys
 import time
 import functools
+import traceback
+from typing import Callable, Any
 from budget_app.exceptions import BudgetAppError
 
-def handle_cli_error(func):
+def is_debug_mode() -> bool:
+    """CLI 옵션 --debug 또는 환경변수 BUDGET_APP_DEBUG=1 활성화 여부 확인"""
+    return "--debug" in sys.argv or os.environ.get("BUDGET_APP_DEBUG") == "1"
+
+def handle_cli_error(func: Callable[..., Any]) -> Callable[..., Any]:
     """
-    CLI 명령어 실행 중 발생하는 예외를 감싸서,
-    개발용 스택 트레이스(긴 빨간 에러 메시지)를 감추고 
-    사용자 친화적인 [오류] 원인과 [힌트] 해결책 형태로 출력한 뒤 비정상 종료(exit code 1)합니다.
+    [데코레이터: 예외 처리 및 POSIX 종료 코드 제어]
+    - 동작: CLI 명령어 실행 중 발생하는 예외를 가로채어 스택트레이스를 은닉하고 [오류]/[힌트]를 출력합니다.
+    - 부작용(Side Effect): 오류 발생 시 프로세스를 exit_code(2, 3, 4, 1)로 강제 종료(sys.exit)합니다.
+    - 디버그 모드: --debug 플래그 활성화 시 상세 스택트레이스를 추가 출력합니다.
     """
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         try:
-            # 원본 함수 실행
             return func(*args, **kwargs)
         except BudgetAppError as e:
-            # 의도된 비즈니스 예외 처리
             print(f"[오류] {e.message}")
             print(f"[힌트] {e.hint}")
-            sys.exit(1)
+            if is_debug_mode():
+                print(f"[디버그 정보] 예외 클래스: {e.__class__.__name__}, 할당된 종료 코드: {e.exit_code}")
+                traceback.print_exc()
+            sys.exit(e.exit_code)
         except Exception as e:
-            # 예상치 못한 시스템 오류 처리
             print(f"[오류] 알 수 없는 오류가 발생했습니다: {str(e)}")
-            print(f"[힌트] 관리자에게 문의하거나 입력 형식을 다시 확인하세요.")
+            print(f"[힌트] 관리자에게 문의하거나 --debug 옵션으로 상세 오류를 확인하세요.")
+            if is_debug_mode():
+                print("[디버그 정보] 미처리 내부 스택트레이스:")
+                traceback.print_exc()
             sys.exit(1)
     return wrapper
 
-def measure_execution_time(func):
+def measure_execution_time(func: Callable[..., Any]) -> Callable[..., Any]:
     """
-    함수 실행 전후의 시각을 측정하여 순수 실행 시간을 계산하는 데코레이터입니다.
-    대용량 데이터 조회나 복잡한 집계 작업의 성능 프로파일링에 활용할 수 있습니다.
+    [데코레이터: 성능 프로파일링 및 실행 시간 측정]
+    - 동작: 대상 함수의 호출 시점부터 완료 시점까지의 경과 시간을 초 단위로 정밀 측정합니다.
+    - 부작용(Side Effect): 환경변수 BUDGET_APP_PROFILE=1 활성화 시 표준 에러(stderr)에 소요 시간을 출력합니다.
     """
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        start_time = time.time()       # 함수 시작 시각 기록
-        result = func(*args, **kwargs) # 실제 비즈니스 로직 실행
-        end_time = time.time()         # 함수 종료 시각 기록
-        # 필요 시 실행 시간 로깅: print(f"[{func.__name__}] 소요 시간: {end_time - start_time:.4f}초")
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        duration = time.time() - start_time
+        if os.environ.get("BUDGET_APP_PROFILE") == "1" or is_debug_mode():
+            sys.stderr.write(f"[성능 측정] {func.__name__} 소요 시간: {duration:.4f}초\n")
         return result
     return wrapper
 
-def log_action(func):
+def log_action(func: Callable[..., Any]) -> Callable[..., Any]:
     """
-    주요 데이터 변경 작업(추가, 수정, 삭제)이 호출되었음을 추적하기 위한 횡단 관심사 로깅 데코레이터입니다.
+    [데코레이터: 비즈니스 감사(Audit) 로깅]
+    - 동작: 거래/카테고리/예산의 생성·수정·삭제 등 주요 상태 변경 메서드 호출 이벤트를 감지합니다.
+    - 부작용(Side Effect): 환경변수 BUDGET_APP_AUDIT=1 활성화 시 호출된 함수명과 파라미터를 audit 로그 스트림에 기록합니다.
     """
     @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        # 함수 실행
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if os.environ.get("BUDGET_APP_AUDIT") == "1":
+            sys.stderr.write(f"[감사 로그] 메서드 실행: {func.__name__}, 호출 시각: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
         return func(*args, **kwargs)
     return wrapper

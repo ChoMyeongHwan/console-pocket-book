@@ -26,24 +26,50 @@ import uuid
 
 @dataclass
 class Transaction:
-    """단일 거래 내역(수입/지출)을 나타내는 데이터 모델"""
+    """
+    [단일 거래 내역(수입/지출) 데이터 모델]
+    - 핵심 책임: 
+      1. 개별 거래의 상태(일자, 유형, 카테고리, 금액, 메모, 태그) 캡슐화
+      2. 고유 식별자(ID: 'TX-XXXXXX')의 자동 채번 및 불변 식별성 보장
+    - 불변 조건 (Invariants):
+      - date: 반드시 유효한 YYYY-MM-DD 형식
+      - type: 반드시 'income' 또는 'expense' 중 하나
+      - amount: 반드시 0보다 큰 양의 정수 (amount > 0)
+      - id: 객체 생성 시 1회 고유 채번되며 수정되지 않음
+    """
     date: str                                       # 거래 일자 (YYYY-MM-DD 형식의 문자열)
     type: str                                       # 거래 유형 ('income' 또는 'expense')
     category: str                                   # 카테고리명 (예: food, salary)
     amount: int                                     # 금액 (양의 정수)
     memo: str = ""                                  # 메모 (선택 입력, 기본값은 빈 문자열)
     tags: List[str] = field(default_factory=list)   # 태그 목록 (예: ['외식', '점심'])
-    # 고유 ID 생성: 6자리 16진수 랜덤 문자열을 대문자로 추출하여 'TX-XXXXXX' 형태로 기본 생성
+    # ID 생성 책임: uuid4 기반 16진수 6자리 난수를 생성하여 중복 없는 거래 식별자 부여
     id: str = field(default_factory=lambda: f"TX-{uuid.uuid4().hex[:6].upper()}")
 
 @dataclass
 class Category:
-    """가계부 지출/수입 항목의 분류를 나타내는 카테고리 모델"""
+    """
+    [가계부 카테고리 분류 데이터 모델]
+    - 핵심 책임:
+      1. 지출 및 수입 거래의 분류 체계 정의
+      2. 시스템 기본 카테고리와 사용자 추가 카테고리의 구분을 통한 보호 정책 플래그 관리
+    - 불변 조건 (Invariants):
+      - name: 비어있지 않은 고유 문자열
+      - is_default: True인 경우 시스템 기본 카테고리로 간주되어 삭제 불가
+    """
     name: str                                       # 카테고리 이름 (예: food, transport)
     is_default: bool = False                        # 시스템 기본 제공 카테고리 여부 (기본값: False)
 
 @dataclass
 class Budget:
-    """특정 월의 목표 지출 예산을 나타내는 모델"""
+    """
+    [월별 목표 지출 예산 데이터 모델]
+    - 핵심 책임:
+      1. 특정 월(YYYY-MM)에 대한 지출 한도 설정 상태 유지
+      2. 월별 요약(summary) 시 예산 사용률 및 초과 여부 산출의 기준 데이터 제공
+    - 불변 조건 (Invariants):
+      - month: 반드시 YYYY-MM 형식
+      - amount: 0보다 큰 양의 정수 (amount > 0)
+    """
     month: str                                      # 대상 월 (YYYY-MM 형식의 문자열)
     amount: int                                     # 목표 예산 금액 (양의 정수)

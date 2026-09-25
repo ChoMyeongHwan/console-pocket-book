@@ -9,7 +9,7 @@
    - `git commit`, `git push` 처럼 하나의 프로그램 안에서 여러 하위 명령어(`add`, `list`, `summary`, `budget` 등)를
      분기 처리할 수 있게 해주는 구조입니다.
 3. 부모 파서 (Parent Parser - parents=[parent_parser]):
-   - 모든 하위 명령어에서 공통으로 쓸 옵션(`--data-dir`)을 한 번만 정의해두고,
+   - 모든 하위 명령어에서 공통으로 쓸 옵션(`--data-dir`, `--debug`)을 한 번만 정의해두고,
      각 서브파서가 `parents=[parent_parser]`로 물려받게 함으로써 코드 중복을 제거합니다.
 4. 예약어 피하기 (dest="from_date"):
    - 파이썬에서 `from`은 `from module import ...`에 사용되는 '예약어(Keyword)'이므로 변수명으로 쓸 수 없습니다.
@@ -21,25 +21,28 @@
 
 import argparse
 import sys
+from typing import Optional, List
 from budget_app.repository import Repository
 from budget_app.services import BudgetService
 from budget_app.decorators import handle_cli_error
 from budget_app.exceptions import ValidationError
+from budget_app.models import Transaction
 
-def _print_tx(tx):
+def _print_tx(tx: Transaction) -> None:
     """단일 거래 내역을 규격화된 한 줄 텍스트로 콘솔에 출력 (ID | 날짜 | 타입 | 카테고리 | 금액 | 메모)"""
     memo_str = tx.memo if tx.memo else ""
     print(f"{tx.id} | {tx.date} | {tx.type} | {tx.category} | {tx.amount} | {memo_str}")
 
 @handle_cli_error
-def main(argv=None):
+def main(argv: Optional[List[str]] = None) -> None:
     """
     애플리케이션 진입 함수:
     명령줄 인자를 파싱하고 적절한 서비스 메서드를 호출하여 결과를 터미널에 출력합니다.
     """
-    # 하위 모든 서브커맨드에서 공유할 부모 파서 정의 (공통 옵션: --data-dir)
+    # 하위 모든 서브커맨드에서 공유할 부모 파서 정의 (공통 옵션: --data-dir, --debug)
     parent_parser = argparse.ArgumentParser(add_help=False)
     parent_parser.add_argument("--data-dir", default="./data", help="데이터 저장 디렉터리 (기본값: ./data)")
+    parent_parser.add_argument("--debug", action="store_true", help="개발용 디버그 모드 활성화 (상세 오류/스택트레이스 노출)")
 
     # 메인 파서 생성
     parser = argparse.ArgumentParser(
@@ -71,6 +74,7 @@ def main(argv=None):
     parser_sum = subparsers.add_parser("summary", help="월별 요약 및 카테고리 리포트", parents=[parent_parser])
     parser_sum.add_argument("--month", required=True, help="조회할 월 (YYYY-MM)")
     parser_sum.add_argument("--top", type=int, default=3, help="지출 상위 카테고리 개수 (기본값: 3)")
+    parser_sum.add_argument("--threshold", type=float, default=100.0, help="예산 초과 경고 기준 퍼센트 (기본값: 100.0)")
 
     # 5. 예산 설정 (budget set)
     parser_bud = subparsers.add_parser("budget", help="월별 예산 설정", parents=[parent_parser])
@@ -90,6 +94,7 @@ def main(argv=None):
 
     parser_cat_remove = cat_subparsers.add_parser("remove", help="카테고리 삭제", parents=[parent_parser])
     parser_cat_remove.add_argument("name", help="삭제할 카테고리명")
+    parser_cat_remove.add_argument("--replace-with", help="사용 중인 거래 내역을 이전할 대체 카테고리명")
 
     # 7. 거래 수정 (update) - 옵션 기반
     parser_upd = subparsers.add_parser("update", help="거래 수정 (옵션 기반)", parents=[parent_parser])
@@ -180,7 +185,7 @@ def main(argv=None):
 
     # 4. summary: 월별 요약 및 TOP N 지출 출력
     elif args.command == "summary":
-        res = svc.get_monthly_summary(month=args.month, top_n=args.top)
+        res = svc.get_monthly_summary(month=args.month, top_n=args.top, alert_threshold=args.threshold)
         if res.get("status") == "데이터 없음":
             print("데이터 없음")
         else:
@@ -189,7 +194,12 @@ def main(argv=None):
             print(f"잔액: {res['balance']}원")
             if res.get("budget"):
                 b = res["budget"]
-                warn_str = " [경고: 예산 초과!]" if b["warning"] else ""
+                if b["alert_level"] == "DANGER":
+                    warn_str = " [경고: 예산 초과!]"
+                elif b["alert_level"] == "CAUTION":
+                    warn_str = " [주의: 예산 80% 이상 소진]"
+                else:
+                    warn_str = ""
                 print(f"예산: {b['amount']}원 (사용률 {b['usage_rate']:.1f}%){warn_str}")
             
             top_cats = res.get("top_categories", [])
@@ -218,8 +228,11 @@ def main(argv=None):
             svc.add_category(name)
             print(f"[저장 완료] category={name}")
         elif args.category_action == "remove":
-            svc.remove_category(args.name)
-            print(f"[삭제 완료] category={args.name}")
+            svc.remove_category(args.name, replace_with=args.replace_with)
+            if args.replace_with:
+                print(f"[삭제 및 이전 완료] category={args.name} -> {args.replace_with}")
+            else:
+                print(f"[삭제 완료] category={args.name}")
         else:
             parser_cat.print_help()
 
@@ -256,6 +269,10 @@ def main(argv=None):
     elif args.command == "import":
         res = svc.import_csv(args.from_path)
         print(f"[완료] imported={res['imported']}, skipped={res['skipped']}")
+        if res.get("skipped_details"):
+            print("[스킵 상세 리포트]")
+            for item in res["skipped_details"]:
+                print(f"  - {item['row']}행: {item['reason']}")
 
 if __name__ == "__main__":
     main()

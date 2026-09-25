@@ -25,7 +25,7 @@ import shutil
 from budget_app.repository import Repository
 from budget_app.services import BudgetService
 from budget_app.models import Category
-from budget_app.exceptions import ValidationError, NotFoundError
+from budget_app.exceptions import BudgetAppError, ValidationError, NotFoundError, DataStoreError
 
 class TestBudgetApp(unittest.TestCase):
     """가계부 애플리케이션의 10대 핵심 기능 및 예외 처리를 검증하는 테스트 케이스"""
@@ -110,6 +110,20 @@ class TestBudgetApp(unittest.TestCase):
         self.svc.remove_category("custom_hobby")
         self.assertNotIn("custom_hobby", [c.name for c in self.svc.list_categories()])
 
+    def test_category_replacement_policy(self):
+        """사용 중인 카테고리 삭제 시 대체 카테고리(--replace-with) 이전 마이그레이션 정책 검증"""
+        self.svc.add_category("old_cat")
+        tx = self.svc.add_transaction("2026-09-24", "expense", "old_cat", 7000, "테스트")
+        
+        # 대체 카테고리로 지정하여 삭제
+        self.svc.remove_category("old_cat", replace_with="food")
+        
+        # old_cat은 삭제되고 기존 거래의 카테고리는 food로 갱신되었는지 검증
+        cats = [c.name for c in self.svc.list_categories()]
+        self.assertNotIn("old_cat", cats)
+        updated_txs = list(self.svc.list_transactions())
+        self.assertEqual(updated_txs[0].category, "food")
+
     def test_search_transactions(self):
         """키워드, 날짜 범위, 타입, 태그 조건 검색 검증"""
         self.svc.add_transaction("2026-01-10", "expense", "food", 10000, "돈까스", ["점심"])
@@ -171,12 +185,14 @@ class TestBudgetApp(unittest.TestCase):
         self.assertEqual(res["balance"], 45000)
         # 예산 초과(55000 > 50000) 경고 확인
         self.assertTrue(res["budget"]["warning"])
+        self.assertEqual(res["budget"]["alert_level"], "DANGER")
         self.assertAlmostEqual(res["budget"]["usage_rate"], 110.0, places=1)
         self.assertEqual(len(res["top_categories"]), 2)
         self.assertEqual(res["top_categories"][0][0], "food")
         
-    def test_csv_export_import(self):
-        """CSV 내보내기/가져오기 왕복 검증 및 필수 조건 누락 예외 검증"""
+    def test_csv_export_import_and_partial_skip_report(self):
+        """CSV 왕복 및 오류 행 부분 임포트(스킵 사유 상세 리포트) 검증"""
+        # 정상 데이터 추가 후 내보내기
         self.svc.add_transaction("2026-09-24", "expense", "food", 10000, "점심", ["밥"])
         csv_path = os.path.join(self.test_dir, "test.csv")
         
@@ -187,18 +203,33 @@ class TestBudgetApp(unittest.TestCase):
         # month 조건 지정하여 export
         exported_count = self.svc.export_csv(csv_path, month="2026-09")
         self.assertEqual(exported_count, 1)
+
+        # 잘못된 행이 포함된 CSV 파일 작성
+        mixed_csv_path = os.path.join(self.test_dir, "mixed.csv")
+        with open(mixed_csv_path, "w", encoding="utf-8") as f:
+            f.write("date,type,category,amount,memo,tags\n")
+            f.write("2026-09-25,expense,food,12000,정상건,점심\n")
+            f.write("2024-13-40,expense,food,10000,날짜오류,오류\n")
+            f.write("2026-09-26,expense,food,invalid_amt,금액오류,오류\n")
         
         # 별도 저장소에서 import 테스트
         repo2 = Repository(data_dir=os.path.join(self.test_dir, "new"))
         svc2 = BudgetService(repo2)
-        res = svc2.import_csv(csv_path)
+        res = svc2.import_csv(mixed_csv_path)
         
+        # 1건 성공, 2건 스킵 확인
         self.assertEqual(res["imported"], 1)
-        self.assertEqual(res["skipped"], 0)
-        txs = list(svc2.list_transactions())
-        self.assertEqual(len(txs), 1)
-        self.assertEqual(txs[0].amount, 10000)
-        self.assertEqual(txs[0].memo, "점심")
+        self.assertEqual(res["skipped"], 2)
+        self.assertEqual(len(res["skipped_details"]), 2)
+        self.assertEqual(res["skipped_details"][0]["row"], 3)
+        self.assertEqual(res["skipped_details"][1]["row"], 4)
+
+    def test_exit_codes_mapping(self):
+        """주요 비즈니스 예외별 POSIX exit code 매핑 검증"""
+        self.assertEqual(BudgetAppError.exit_code, 1)
+        self.assertEqual(ValidationError.exit_code, 2)
+        self.assertEqual(NotFoundError.exit_code, 3)
+        self.assertEqual(DataStoreError.exit_code, 4)
 
 if __name__ == "__main__":
     unittest.main()

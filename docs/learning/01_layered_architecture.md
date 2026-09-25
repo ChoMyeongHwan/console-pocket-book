@@ -1,31 +1,44 @@
-# 01. 계층형 아키텍처 (Layered Architecture)
+# 01. 계층형 아키텍처 (Layered Architecture) 및 모듈 분리
 
 ## 1. 개요
 `budget_app`은 소프트웨어 설계 원칙 중 하나인 **계층형 아키텍처(Layered Architecture)** 를 채택하여 개발되었습니다. 
 전체 시스템을 역할과 책임에 따라 여러 계층으로 나누어, 각 계층이 고유한 관심사만 처리하도록 합니다.
 
-## 2. 계층 분리 (SRP: 단일 책임 원칙)
-프로젝트는 크게 4가지 계층으로 분리되어 있습니다.
+---
 
-- **Models (`budget_app/models.py`)**
-  - 시스템의 핵심 데이터 구조(엔티티)를 정의합니다.
-  - `Transaction`, `Category`, `Budget` 클래스가 여기에 해당합니다.
-- **Repository (`budget_app/repository.py`)**
-  - 데이터를 저장하고 불러오는 데이터 영속성(Persistence)을 담당합니다.
-  - JSONL 파일 읽기/쓰기, 파일 I/O 스트리밍 처리를 전담합니다.
-- **Service (`budget_app/service.py`)**
-  - 비즈니스 로직을 처리합니다.
-  - 유효성 검사, 필터링, 데이터 가공 등을 수행하며, Repository를 호출해 데이터를 조작합니다.
-- **CLI (`budget_app/cli.py`)**
-  - 사용자 인터페이스(UI)를 담당합니다.
-  - 사용자 입력을 파싱하고 Service를 호출한 뒤, 그 결과를 터미널에 친화적인 형태(예: 테이블)로 출력합니다.
+## 2. 파일별 책임 분류 및 모듈 매핑 (PASS #8 보완)
 
-## 3. 다이어그램 (아키텍처 구조)
+단일 책임 원칙(SRP)에 따라 각 파이썬 모듈의 책임을 명확히 규정하였습니다.
+
+| 파일명 | 계층 (Layer) | 핵심 책임 및 역할 요약 |
+|---|:---:|---|
+| [`budget_app/__main__.py`](../../budget_app/__main__.py) | Entry Point | `python -m budget_app` 실행 시 CLI 진입 함수를 기동하는 부트스트랩 모듈 |
+| [`budget_app/cli.py`](../../budget_app/cli.py) | Presentation | 커맨드 라인 인자 파싱(`argparse`), 대화형 입력 프롬프트 및 화면 포맷팅 전담 |
+| [`budget_app/services.py`](../../budget_app/services.py) | Business Logic | 거래 CRUD, 예산 분석, 카테고리 무결성, CSV 임포트/익스포트 등 비즈니스 규칙 총괄 |
+| [`budget_app/repository.py`](../../budget_app/repository.py) | Persistence | 3대 영구 데이터 파일 I/O, `yield` 스트리밍 및 원자적 교체(`atomic save`) 전담 |
+| [`budget_app/models.py`](../../budget_app/models.py) | Domain Model | `dataclass` 기반 거래/카테고리/예산 불변 조건 및 고유 식별자(ID) 채번 정의 |
+| [`budget_app/exceptions.py`](../../budget_app/exceptions.py) | Exception | 세분화된 POSIX 종료 코드(1, 2, 3, 4)와 원인/힌트를 갖춘 비즈니스 예외 계층 |
+| [`budget_app/decorators.py`](../../budget_app/decorators.py) | Cross-Cutting | 스택트레이스 숨김, 디버그 모드 토글, 시간 측정, 감사 추적 등 횡단 관심사 래핑 |
+
+---
+
+## 3. 영구 저장 파일 3종 및 데이터 보존 (PASS #2 보완)
+
+저장소 계층은 비즈니스 도메인에 따라 3개 이상의 물리 파일로 데이터를 분리하여 보존합니다:
+- `./data/transactions.jsonl`: 거래 내역 영구 보존
+- `./data/categories.jsonl`: 기본 8종 카테고리 자동 시드 및 사용자 카테고리 보존
+- `./data/budgets.jsonl`: 월별 목표 예산 보존
+
+프로그램이 재실행되어도 `Repository.__init__`에서 기존 파일의 존재 유무를 확인하고 이어서 스트리밍 로드하므로 데이터가 안전하게 지속됩니다.
+
+---
+
+## 4. 다이어그램 (아키텍처 구조)
 
 ```mermaid
 flowchart TD
     User([User]) --> CLI[CLI Layer\nbudget_app/cli.py]
-    CLI --> Service[Service Layer\nbudget_app/service.py]
+    CLI --> Service[Service Layer\nbudget_app/services.py]
     Service --> Repo[Repository Layer\nbudget_app/repository.py]
     Repo --> Data[(Data Files\n./data/*.jsonl)]
     
@@ -34,10 +47,12 @@ flowchart TD
     Models -.-> Repo
 ```
 
-## 4. 장점 (왜 계층을 나누어야 할까?)
+---
+
+## 5. 장점 (왜 계층을 나누어야 할까?)
 
 * **유지보수성 향상**: UI가 웹(Web)이나 GUI로 변경되더라도, Service와 Repository 계층은 수정 없이 재사용할 수 있습니다.
-* **테스트 용이성 (Testability)**: Service 로직을 테스트할 때 실제 파일 시스템을 건드리는 Repository 대신 Mock 객체를 주입하여 빠르고 안정적인 단위 테스트가 가능합니다.
+* **테스트 용이성 (Testability)**: Service 로직을 테스트할 때 실제 파일 시스템을 건드리는 Repository 대신 격리된 테스트 저장소를 주입하여 빠르고 안정적인 단위 테스트가 가능합니다.
 * **코드 가독성**: 기능 수정이 필요할 때, 파일 입출력은 Repository를, 로직 변경은 Service를 확인하면 되므로 원인 파악이 쉽습니다.
 
 ---

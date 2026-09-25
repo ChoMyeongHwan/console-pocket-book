@@ -4,6 +4,8 @@
 Python의 **데코레이터(Decorator)** 는 기존 함수의 코드를 수정하지 않고, 그 함수에 앞뒤로 새로운 기능을 추가(래핑, Wrapping)할 수 있게 해주는 강력한 문법입니다.
 `budget_app`에서는 로깅, 실행 시간 측정, 예외 래핑(Exception Wrapping)과 같은 **공통 관심사(Cross-cutting Concerns)** 를 분리하기 위해 데코레이터를 사용합니다.
 
+---
+
 ## 2. 왜 공통 관심사를 분리해야 할까?
 비즈니스 로직(예: 거래 내역 추가, 조회) 내부에 매번 로깅 코드와 실행 시간 측정 코드를 넣으면 중복이 발생하고, 실제 비즈니스 로직을 파악하기 어려워집니다.
 
@@ -23,14 +25,35 @@ def add_transaction(tx):
 
 ### 좋은 예 (데코레이터를 통한 분리)
 ```python
-@measure_time
-@handle_exceptions
+@measure_execution_time
+@log_action
 def add_transaction(tx):
     # 실제 핵심 로직에만 집중!
     repo.save(tx)
 ```
 
-## 3. `@functools.wraps`의 원리와 중요성
+---
+
+## 3. `budget_app`의 3대 데코레이터 동작 및 부작용(Side Effects) (PASS #12 보완)
+
+| 데코레이터 | 핵심 동작 | 부작용 (Side Effects) |
+|---|---|---|
+| **`@handle_cli_error`** | CLI 실행 중 발생하는 비즈니스/시스템 예외를 가로채어 스택트레이스를 은닉하고 [오류]/[힌트]를 출력 | 오류 발생 시 `sys.exit(exit_code)`를 호출하여 프로세스를 강제 비정상 종료 (exit code 1, 2, 3, 4) |
+| **`@measure_execution_time`** | 비즈니스 로직 함수의 호출 시점부터 반환 시점까지의 경과 시간을 초 단위 정밀 측정 | 환경변수 `BUDGET_APP_PROFILE=1` 또는 디버그 모드 시 `sys.stderr`에 소요 시간을 출력 |
+| **`@log_action`** | 거래/카테고리/예산의 변경(CUD) 이벤트 호출을 감지하여 감사 추적 | 환경변수 `BUDGET_APP_AUDIT=1` 활성화 시 호출된 함수명과 파라미터를 감사 스트림에 기록 |
+
+---
+
+## 4. 개발용/운영용 디버그 토글 (PASS #6 보완)
+
+기본적으로는 일반 사용자를 위해 스택트레이스를 숨기지만, 개발자가 버그를 분석할 수 있도록 **디버그 모드 토글**을 지원합니다:
+- CLI 옵션: `python -m budget_app --debug <command>`
+- 환경변수: `export BUDGET_APP_DEBUG=1`
+- 디버그 모드 활성화 시: `@handle_cli_error`가 예외 클래스명, exit code, 그리고 파이썬 내부 스택트레이스(`traceback.print_exc()`)를 추가로 출력합니다.
+
+---
+
+## 5. `@functools.wraps`의 원리와 중요성
 커스텀 데코레이터를 만들 때 `@functools.wraps(func)`를 내부 래퍼(Wrapper) 함수에 붙이는 것이 파이썬의 권장 사항(Best Practice)입니다.
 만약 붙이지 않는다면, 원래 함수(`add_transaction`)의 이름(`__name__`)이나 독스트링(`__doc__`) 등의 메타데이터가 래퍼 함수의 이름으로 덮어씌워지는 문제가 발생하여 디버깅이 힘들어집니다.
 
@@ -48,7 +71,9 @@ def measure_time(func):
     return wrapper
 ```
 
-## 4. 다이어그램 (데코레이터 동작 원리)
+---
+
+## 6. 데코레이터 동작 원리 다이어그램
 
 ```mermaid
 sequenceDiagram

@@ -310,12 +310,12 @@ PDF 10페이지에 명시된 **스택트레이스 숨김 + 원인과 힌트 제�
 마지막으로 코드 품질과 학습 산출물에 대해 설명하고 시연을 마무리합니다.
 
 * **🗣️ 발표 멘트**:
-  > *"본 프로젝트는 단순히 기능만 구현한 것이 아니라, 구현 후 동작 원리를 체계적으로 학습할 수 있도록 `docs/learning/` 폴더에 5대 핵심 개념 학습 가이드를 완비했습니다:*
-  > 1. *`01_layered_architecture.md`: CLI, Service, Repository, Model 계층 분리와 단일 책임 원칙(SRP)*
-  > 2. *`02_generator_streaming.md`: `yield` 제너레이터를 활용한 대용량 파일 스트리밍과 O(1) 메모리 최적화*
-  > 3. *`03_decorators.md`: `@handle_cli_error` 등 공통 관심사 분리와 `@functools.wraps`의 원리*
-  > 4. *`04_type_hints_and_dataclass.md`: 타입 힌트와 `dataclass`를 통한 견고한 데이터 계약(Contract) 설계*
-  > 5. *`05_error_handling_and_cli.md`: 사용자 경험 중심 CLI 에러 핸들링과 POSIX 종료 코드 규격*
+  > *"본 프로젝트는 단순히 기능만 구현한 것이 아니라, 구현 후 동작 원리를 체계적으로 학습하고 입증할 수 있도록 완성도 높은 문서 체계를 갖추었습니다:*
+  > 1. *`docs/EXECUTION_EVIDENCE.md`: 10대 핵심 기능의 1:1 터미널 입출력 캡처 및 실행 증빙*
+  > 2. *`docs/LARGE_SCALE_ANALYSIS.md`: 100k+ 대용량 환경의 정렬/I/O 병목 지점 및 샤딩/저널링 개선 로드맵*
+  > 3. *`docs/IMPORT_POLICY.md`: Best-Effort 부분 임포트 정책 및 행 단위 스킵 리포트 규격*
+  > 4. *`docs/CATEGORY_POLICY.md`: 기본 카테고리 보호 및 대체 마이그레이션 정책*
+  > 5. *`docs/learning/` 5종 심화 가이드: 계층형 설계, 제너레이터 스트리밍, 데코레이터, 데이터 계약, CLI UX*
   >
   > *또한 각 소스코드 파일마다 비전공자도 쉽게 이해할 수 있도록 파이썬 핵심 문법 설명 주석을 상세히 작성해 두었습니다."*
 
