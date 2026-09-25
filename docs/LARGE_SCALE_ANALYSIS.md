@@ -55,25 +55,27 @@ data/
   - 월별 요약(`summary --month 2024-01`) 시 해당 월 파일만 읽으므로 I/O 비용이 **95% 이상 절감**됩니다 ($O(N) \rightarrow O(N / M)$).
   - 거래 추가 시 해당 월의 파일만 수정되므로 전체 재작성 오버헤드가 대폭 감소합니다.
 
-### 3.2 개선안 2: Append-Only 저널링과 톰스톤(Tombstone) 압축
+### 3.2 개선안 2: Append-Only 저널링 (✅ 구현 완료: repository.append_transaction)
 
-* **추가(Add)**: 기존 파일 전체를 다시 쓰지 않고, 파일 끝에 `open(path, 'a')` 모드로 한 줄만 덧붙이는 $O(1)$ 원자적 덧붙이기(`append`) 방식으로 전환합니다.
-* **수정/삭제(Update/Delete)**: 기존 행을 즉시 수정하지 않고, `{"op": "DELETE", "id": "TX-001"}` 형태의 **톰스톤(Tombstone)** 로그를 추가 기록합니다.
-* **백그라운드 콤팩션(Compaction)**: 일정한 임계치(예: 삭제 레코드 20% 초과 시)에 도달했을 때 백그라운드 워커가 유효한 최신 상태만 모아 파일을 압축 정리합니다.
+* **추가(Add)**: 기존 파일 전체를 다시 쓰지 않고, 파일 끝에 `open(path, 'a')` 모드로 한 줄만 덧붙이는 $O(1)$ 원자적 덧붙이기(`append_transaction`) 방식을 구현하여 신규 추가 시 메모리 로드 0% 및 디스크 I/O를 극소화했습니다.
+* **수정/삭제(Update/Delete)**: 전체 데이터를 메모리에 `list()`로 올리지 않고, `stream_rewrite_transactions`를 통해 1건씩 스트리밍 읽고 변환하여 임시 파일에 기록한 뒤 원자적 파일 교체(`os.replace`)를 수행합니다.
 
-### 3.3 개선안 3: 외부 정렬 (External Merge Sort) 적용
+### 3.3 개선안 3: 외부 정렬 (External Merge Sort) 적용 (✅ 구현 완료: sort_utils.external_merge_sort)
 
-메모리가 32MB 이하로 제한된 초경량 환경에서도 100만 건 이상을 정렬할 수 있도록 **외부 병합 정렬** 기법을 적용합니다.
+메모리가 극도로 제한된 환경에서도 수십만 건 이상을 정렬할 수 있도록 **외부 병합 정렬(External Merge Sort)** 기법을 `budget_app/sort_utils.py`에 완전 구현하여 `list` 및 `search` 서비스에 연동했습니다.
 
 ```mermaid
 flowchart LR
-    A["대용량 JSONL<br/>(100k 레코드)"] --> B["청크 1 (10k) 정렬<br/>temp_1.jsonl"]
-    A --> C["청크 2 (10k) 정렬<br/>temp_2.jsonl"]
+    A["대용량 JSONL<br/>(100k 레코드)"] --> B["청크 1 (1k) 정렬<br/>temp_1.jsonl"]
+    A --> C["청크 2 (1k) 정렬<br/>temp_2.jsonl"]
     A --> D["청크 ... 정렬<br/>temp_N.jsonl"]
     B & C & D --> E["K-Way 병합 스트리밍<br/>heapq.merge()"]
     E --> F["최종 최신순 스트림 출력 (메모리 O(K))"]
 ```
-* **구현**: 파이썬 표준 라이브러리인 `heapq.merge`를 사용하여 사전 정렬된 임시 청크 파일들을 메모리 부담 없이 파이프라인으로 병합 출력합니다.
+* **구현 세부사항**:
+  - 파이썬 표준 라이브러리 `heapq.merge`를 사용하여 사전 정렬된 임시 청크 파일들을 메모리 부담 없이 파이프라인으로 병합 출력합니다.
+  - 데이터가 청크 크기 이하인 경우 디스크 I/O 없이 인메모리에서 즉시 yield하는 **패스트 패스(Fast-Path)** 최적화가 적용되어 있습니다.
+  - 스트리밍 순회 완료 또는 `break` 조기 중단 시 `finally` 블록에서 임시 파일이 즉시 안전하게 자동 삭제(Clean-up)됩니다.
 
 ---
 

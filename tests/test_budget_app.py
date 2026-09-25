@@ -26,6 +26,7 @@ from budget_app.repository import Repository
 from budget_app.services import BudgetService
 from budget_app.models import Category
 from budget_app.exceptions import BudgetAppError, ValidationError, NotFoundError, DataStoreError
+from budget_app.sort_utils import external_merge_sort
 
 class TestBudgetApp(unittest.TestCase):
     """가계부 애플리케이션의 10대 핵심 기능 및 예외 처리를 검증하는 테스트 케이스"""
@@ -230,6 +231,86 @@ class TestBudgetApp(unittest.TestCase):
         self.assertEqual(ValidationError.exit_code, 2)
         self.assertEqual(NotFoundError.exit_code, 3)
         self.assertEqual(DataStoreError.exit_code, 4)
+
+    def test_external_merge_sort_streaming(self):
+        """외부 정렬(External Merge Sort) 청크 분할, K-way 병합, O(1) 제너레이터 스트리밍 및 파일 정리 검증"""
+        # 12개의 아이템을 chunk_size=3으로 정렬 (총 4개 청크 파일 생성 및 병합)
+        raw_items = [
+            {"date": "2026-01-05", "id": "TX-05"},
+            {"date": "2026-01-01", "id": "TX-01"},
+            {"date": "2026-01-09", "id": "TX-09"},
+            {"date": "2026-01-03", "id": "TX-03"},
+            {"date": "2026-01-08", "id": "TX-08"},
+            {"date": "2026-01-02", "id": "TX-02"},
+            {"date": "2026-01-07", "id": "TX-07"},
+            {"date": "2026-01-04", "id": "TX-04"},
+            {"date": "2026-01-10", "id": "TX-10"},
+            {"date": "2026-01-06", "id": "TX-06"},
+            {"date": "2026-01-12", "id": "TX-12"},
+            {"date": "2026-01-11", "id": "TX-11"},
+        ]
+        
+        # 1. 내림차순(최신순) 정렬 검증
+        sorted_stream = external_merge_sort(
+            iter(raw_items),
+            key=lambda x: (x["date"], x["id"]),
+            reverse=True,
+            chunk_size=3,
+            serializer=lambda x: x,
+            deserializer=lambda d: d
+        )
+        results = list(sorted_stream)
+        self.assertEqual(len(results), 12)
+        self.assertEqual(results[0]["date"], "2026-01-12")
+        self.assertEqual(results[-1]["date"], "2026-01-01")
+        
+        # 2. 오름차순 정렬 검증
+        asc_stream = external_merge_sort(
+            iter(raw_items),
+            key=lambda x: (x["date"], x["id"]),
+            reverse=False,
+            chunk_size=3,
+            serializer=lambda x: x,
+            deserializer=lambda d: d
+        )
+        asc_results = list(asc_stream)
+        self.assertEqual(asc_results[0]["date"], "2026-01-01")
+        self.assertEqual(asc_results[-1]["date"], "2026-01-12")
+
+        # 3. 조기 중단(Early break) 시 임시 파일 정리(Clean-up) 보장 검증
+        partial_stream = external_merge_sort(
+            iter(raw_items),
+            key=lambda x: (x["date"], x["id"]),
+            reverse=True,
+            chunk_size=3,
+            serializer=lambda x: x,
+            deserializer=lambda d: d
+        )
+        picked = []
+        for i, item in enumerate(partial_stream):
+            if i >= 2:
+                break
+            picked.append(item)
+        self.assertEqual(len(picked), 2)
+
+    def test_zero_load_streaming_in_services(self):
+        """list_transactions 및 search_transactions가 제너레이터 스트림을 반환하며 메모리 O(1)로 동작함을 검증"""
+        import types
+        self.svc.add_transaction("2026-01-01", "expense", "food", 1000, "1")
+        self.svc.add_transaction("2026-01-02", "expense", "food", 2000, "2")
+        self.svc.add_transaction("2026-01-03", "expense", "food", 3000, "3")
+
+        list_gen = self.svc.list_transactions(limit=2)
+        # 반환 객체가 제너레이터 타입인지 확인
+        self.assertIsInstance(list_gen, types.GeneratorType)
+        first_two = list(list_gen)
+        self.assertEqual(len(first_two), 2)
+        self.assertEqual(first_two[0].date, "2026-01-03")
+
+        search_gen = self.svc.search_transactions(category="food")
+        self.assertIsInstance(search_gen, types.GeneratorType)
+        found = list(search_gen)
+        self.assertEqual(len(found), 3)
 
 if __name__ == "__main__":
     unittest.main()

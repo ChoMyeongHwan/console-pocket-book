@@ -17,6 +17,7 @@
 | [`budget_app/cli.py`](./budget_app/cli.py) | Presentation | `argparse` 기반 명령어 파싱, 대화형 콘솔 입출력 처리 및 포맷팅 |
 | [`budget_app/services.py`](./budget_app/services.py) | Business Logic | 거래 CRUD, 예산 분석, 카테고리 무결성, CSV 입출력 등 핵심 규칙 총괄 |
 | [`budget_app/repository.py`](./budget_app/repository.py) | Persistence | JSONL 파일 영구 저장, `yield` 제너레이터 스트리밍 및 원자적 교체 I/O |
+| [`budget_app/sort_utils.py`](./budget_app/sort_utils.py) | Algorithm / Stream | 외부 정렬(External Merge Sort) 및 `heapq.merge` 기반 K-way 병합 스트리밍 |
 | [`budget_app/models.py`](./budget_app/models.py) | Domain Model | `dataclass` 기반 거래/카테고리/예산 불변 조건 및 고유 ID 채번 계약 정의 |
 | [`budget_app/exceptions.py`](./budget_app/exceptions.py) | Exception | 세분화된 POSIX 종료 코드와 원인/힌트를 갖춘 비즈니스 예외 계층 정의 |
 | [`budget_app/decorators.py`](./budget_app/decorators.py) | Cross-Cutting | 스택트레이스 은닉, 디버그 토글, 시간 측정, 감사 로깅 등 공통 관심사 분리 |

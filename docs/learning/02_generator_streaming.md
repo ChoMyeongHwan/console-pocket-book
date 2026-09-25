@@ -47,9 +47,10 @@ def stream_transactions():
 1. 호출자가 제너레이터를 끝까지 순회하면 루프 종료 후 `with` 블록을 빠져나오며 파일이 자동으로 닫힙니다.
 2. 만약 호출자가 `break`를 걸거나 도중에 예외가 발생하여 제너레이터가 소멸(Garbage Collection)될 경우, 파이썬 인터프리터가 제너레이터 내부에 `GeneratorExit` 예외를 주입하여 `finally` 및 컨텍스트 매니저의 `__exit__`을 강제 호출합니다. 따라서 **어떤 예외 경로에서도 파일 디스크립터 누수가 발생하지 않습니다**.
 
-### 4.2 소비자 주의사항 (Consumer Guide)
-- `list(repo.get_transactions())`처럼 즉시 리스트화하면 제너레이터의 메모리 절약 이점이 사라집니다.
-- 따라서 필터링이나 통계 집계 시에는 제너레이터 스트림 상태 그대로 `for tx in repo.get_transactions():` 형태로 소비해야 $O(1)$ 메모리를 달성할 수 있습니다.
+### 4.2 소비자 주의사항 및 외부 정렬(External Merge Sort) 연동 (FAIL #11 보완 완결)
+- `list(repo.get_transactions())`처럼 전체 데이터를 메모리에 적재한 뒤 정렬하면 제너레이터의 메모리 절약($O(1)$) 이점이 상실됩니다.
+- 본 프로젝트에서는 `budget_app/sort_utils.py`의 `external_merge_sort()`를 통해 청크 단위 분할 및 `heapq.merge` 기반 K-way 병합 스트리밍을 구현했습니다.
+- 따라서 `list` 및 `search` 명령어를 실행할 때도 인메모리 전체 로드(`list()`) 없이, $O(K)$의 극소 메모리만을 유지하며 정렬된 결과를 파이프라인으로 스트리밍(yield)합니다.
 
 ---
 
@@ -58,20 +59,27 @@ def stream_transactions():
 ```mermaid
 flowchart LR
     File[(JSONL File)] -->|Line by Line| Repo[Repository\n`yield transaction`]
-    Repo -->|1 item at a time| Filter[Service Filter\n`if type == 'expense'`]
-    Filter -->|Filtered item| Sum[Service Reduce\n`total_amount += amt`]
+    Repo -->|Stream| Pushdown[Predicate Pushdown\n`filter condition`]
+    Pushdown -->|Chunk stream| ExtSort[External Merge Sort\n`heapq.merge()`]
+    ExtSort -->|Sorted stream| CLI[CLI Output Stream\n`TX-XXXXXX | ...`]
 ```
 
 ---
 
-## 6. 대용량(100k+ 레코드) 환경에서의 병목 및 개선안 (FAIL #15 보완)
+## 6. 대용량(100k+ 레코드) 환경에서의 병목 및 외부 정렬 구현
 
-데이터가 100,000건(100k+) 이상으로 확장될 경우, 최신순 정렬을 위한 인메모리 로딩 부하($O(N \log N)$) 및 전체 파일 풀 스캔 I/O 병목이 발생할 수 있습니다.
-이에 대한 상세한 분석 및 월별 파티셔닝(Sharding), Append-Only 저널링, 외부 병합 정렬(External Merge Sort) 아키텍처 개선안은 [**docs/LARGE_SCALE_ANALYSIS.md**](../LARGE_SCALE_ANALYSIS.md)에 상세히 기술되어 있습니다.
+데이터가 100,000건(100k+) 이상으로 확장될 경우에도 안정적인 동작을 보장하기 위해,
+1. **$O(1)$ Append-Only 추가**: 신규 거래 추가 시 전체 파일을 읽지 않고 파일 끝에 즉시 기록 (`repo.append_transaction`)
+2. **스트리밍 원자적 갱신**: 거래 수정/삭제 시 1건씩 스트리밍 읽고 교체 (`repo.stream_rewrite_transactions`)
+3. **외부 병합 정렬(External Merge Sort)**: 대용량 데이터 정렬 시 메모리 폭증 없이 $O(K)$ 메모리로 정렬 스트리밍 (`sort_utils.external_merge_sort`)
+
+상세 분석 및 월별 파티셔닝(Sharding) 로드맵은 [**docs/LARGE_SCALE_ANALYSIS.md**](../LARGE_SCALE_ANALYSIS.md)에 상세히 기술되어 있습니다.
 
 ---
 
 ### 🤔 핵심 질문 & 자가 점검 체크리스트 (스스로 설명해보기)
 - [ ] 100만 줄의 가계부 내역 파일을 `readlines()`로 읽을 때와 `yield`로 읽을 때 메모리 사용량 차이를 설명할 수 있나요?
 - [ ] 제너레이터를 순회하다가 중간에 `break`로 중단했을 때 파일이 안전하게 닫히는 원리는 무엇인가요?
+- [ ] 왜 `sorted(list(repo.get_transactions()))` 대신 `external_merge_sort(repo.get_transactions())`를 사용해야 대용량 데이터에서 메모리가 절약되나요?
+- [ ] `heapq.merge`가 K개의 정렬된 파일 스트림을 병합할 때 메모리 복잡도가 $O(K)$로 유지되는 이유는 무엇인가요?
 - [ ] 왜 CSV 대신 JSONL 포맷이 파이썬 제너레이터 스트리밍에 더 적합한지 2가지 이상 설명할 수 있나요?

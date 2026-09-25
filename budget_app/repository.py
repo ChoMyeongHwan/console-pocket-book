@@ -20,12 +20,15 @@
    - 원본 파일에 직접 쓰기(`write`)를 진행하다가 프로그램이 강제 종료되면 원본 파일이 손상(Corrupted)됩니다.
    - `tempfile.mkstemp`로 임시 파일에 데이터를 완벽히 기록한 뒤, OS 수준의 원자적 연산인 `os.replace`로 순식간에 이름을 변경하여 데이터 무결성을 보장합니다.
    - 쓰기 실패 시 임시 파일을 즉시 제거(unlink)하고 이전 원본 파일을 100% 보존하는 자동 롤백 정책이 적용됩니다.
+6. Append-only 추가 및 스트리밍 파일 갱신 (Stream Rewrite):
+   - 신규 거래는 `append_transaction`을 통해 기존 데이터를 메모리에 읽지 않고 O(1)로 파일 끝에 즉시 추가합니다.
+   - 수정 및 삭제 시에도 `stream_rewrite_transactions`를 통해 전체 데이터를 메모리에 올리지 않고 1건씩 스트리밍 읽고 쓰며 원자적으로 교체합니다.
 """
 
 import os
 import json
 import tempfile
-from typing import Generator, List, Any, Dict
+from typing import Generator, List, Any, Dict, Callable, Optional
 from budget_app.models import Transaction, Category, Budget
 from budget_app.exceptions import DataStoreError
 
@@ -111,6 +114,48 @@ class Repository:
         for data in self._read_jsonl(self.transactions_path):
             yield Transaction(**data)
             
+    def append_transaction(self, transaction: Transaction) -> None:
+        """
+        거래 내역 1건을 파일 끝에 즉시 추가 (O(1) 시간 및 공간 복잡도).
+        기존 데이터를 메모리에 읽어들이지 않고 추가(append) 모드로 스트리밍 기록합니다.
+        """
+        with open(self.transactions_path, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(transaction.__dict__, ensure_ascii=False) + "\n")
+
+    def stream_rewrite_transactions(
+        self,
+        transform_fn: Callable[[Transaction], Optional[Transaction]]
+    ) -> None:
+        """
+        전체 거래 내역을 메모리에 일괄 로드(list)하지 않고,
+        한 줄씩 스트리밍 읽으면서 transform_fn을 적용하여 임시 파일에 기록한 뒤
+        원자적으로 파일을 교체(os.replace)합니다.
+        - transform_fn(tx) -> None: 해당 거래 삭제
+        - transform_fn(tx) -> new_tx: 해당 거래 수정 또는 유지
+        """
+        if not os.path.exists(self.transactions_path):
+            return
+        
+        temp_path = None
+        try:
+            fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(self.transactions_path), text=True)
+            with os.fdopen(fd, 'w', encoding='utf-8') as f_out:
+                for tx in self.get_transactions():
+                    new_tx = transform_fn(tx)
+                    if new_tx is not None:
+                        f_out.write(json.dumps(new_tx.__dict__, ensure_ascii=False) + "\n")
+            os.replace(temp_path, self.transactions_path)
+        except Exception as e:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    pass
+            raise DataStoreError(
+                f"파일 스트리밍 갱신 중 오류가 발생했습니다: {str(e)}",
+                "디스크 여유 공간 및 파일 권한을 확인하세요."
+            )
+
     def save_transactions(self, transactions: List[Transaction]) -> None:
         """전체 거래 목록을 JSONL 파일에 원자적으로 저장"""
         self._write_jsonl_atomic(self.transactions_path, [t.__dict__ for t in transactions])

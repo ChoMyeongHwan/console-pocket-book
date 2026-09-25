@@ -23,6 +23,8 @@ r"""
    - 외부 무거운 라이브러리(pandas 등) 없이 파이썬 표준 라이브러리만으로 CSV 헤더 작성과 딕셔너리 기반 행 파싱을 안전하게 수행합니다.
 7. 부분 임포트(Partial Import) 및 오류 격리:
    - CSV 가져오기 시 한 행의 오류로 전체 작업이 실패하지 않도록 Best-Effort 전략을 취하며, 스킵된 행 번호와 구체적 실패 사유를 리포트로 수집합니다.
+8. 외부 정렬 (External Merge Sort)과 K-way 병합 스트리밍:
+   - `list()`로 전체 거래 데이터를 메모리에 적재하지 않고, `external_merge_sort`를 통해 O(K) 극소 메모리만으로 대용량 거래를 정렬하여 스트리밍(yield)합니다.
 """
 
 import csv
@@ -36,6 +38,7 @@ from budget_app.models import Category, Transaction, Budget
 from budget_app.repository import Repository
 from budget_app.exceptions import ValidationError, NotFoundError
 from budget_app.decorators import measure_execution_time, log_action
+from budget_app.sort_utils import external_merge_sort
 
 class BudgetService:
     """
@@ -80,22 +83,22 @@ class BudgetService:
         if target.is_default:
             raise ValidationError(f"기본 카테고리 '{name}'는 삭제할 수 없습니다.", "사용자가 직접 추가한 카테고리만 삭제 가능합니다.")
         
-        # 참조하는 거래 내역 검사
-        referencing_txs = [tx for tx in self.repo.get_transactions() if tx.category == name]
-        if referencing_txs:
+        # 참조하는 거래 내역 검사 (제너레이터 스트리밍으로 O(1) 메모리 유지)
+        ref_count = sum(1 for tx in self.repo.get_transactions() if tx.category == name)
+        if ref_count > 0:
             if replace_with:
                 replace_cat = next((c for c in categories if c.name == replace_with), None)
                 if not replace_cat:
                     raise NotFoundError(f"대체 대상 카테고리 '{replace_with}'가 존재하지 않습니다.", "존재하는 카테고리를 지정하세요.")
-                # 대체 카테고리로 일괄 마이그레이션
-                all_txs = list(self.repo.get_transactions())
-                for tx in all_txs:
+                # 대체 카테고리로 스트리밍 마이그레이션 (메모리 O(1))
+                def _migrate(tx: Transaction) -> Transaction:
                     if tx.category == name:
                         tx.category = replace_with
-                self.repo.save_transactions(all_txs)
+                    return tx
+                self.repo.stream_rewrite_transactions(_migrate)
             else:
                 raise ValidationError(
-                    f"'{name}' 카테고리를 사용하는 거래 내역이 {len(referencing_txs)}건 존재합니다.",
+                    f"'{name}' 카테고리를 사용하는 거래 내역이 {ref_count}건 존재합니다.",
                     "해당 카테고리의 거래 내역을 삭제/수정하거나, --replace-with 옵션으로 대체 카테고리를 지정하세요."
                 )
                 
@@ -137,7 +140,7 @@ class BudgetService:
     @measure_execution_time
     @log_action
     def add_transaction(self, date: str, type: str, category: str, amount: int, memo: str = "", tags: Optional[List[str]] = None) -> Transaction:
-        """새로운 거래 내역을 유효성 검증 후 추가하고 영구 저장"""
+        """새로운 거래 내역을 유효성 검증 후 추가하고 영구 저장 (O(1) 스트리밍 추가)"""
         self._validate_date(date)
         validated_type = self._validate_type(type)
         self._validate_category(category)
@@ -146,18 +149,21 @@ class BudgetService:
             tags = []
 
         tx = Transaction(date=date, type=validated_type, category=category, amount=amount, memo=memo, tags=tags)
-        transactions = list(self.repo.get_transactions())
-        transactions.append(tx)
-        self.repo.save_transactions(transactions)
+        self.repo.append_transaction(tx)
         return tx
 
     def list_transactions(self, limit: Optional[int] = None) -> Generator[Transaction, None, None]:
         """
-        거래 목록을 최신순(날짜 내림차순)으로 정렬하여,
-        요청 개수(limit)만큼 한 건씩 스트리밍(yield)으로 반환
+        거래 목록을 최신순(날짜 내림차순)으로 외부 정렬(External Merge Sort)하여,
+        요청 개수(limit)만큼 한 건씩 스트리밍(yield)으로 반환 (메모리 O(1) 유지)
         """
-        transactions = sorted(list(self.repo.get_transactions()), key=lambda x: (x.date, x.id), reverse=True)
-        for i, tx in enumerate(transactions):
+        sorted_stream = external_merge_sort(
+            self.repo.get_transactions(),
+            key=lambda x: (x.date, x.id),
+            reverse=True,
+            deserializer=lambda d: Transaction(**d)
+        )
+        for i, tx in enumerate(sorted_stream):
             if limit is not None and i >= limit:
                 break
             yield tx
@@ -166,7 +172,8 @@ class BudgetService:
                             category: Optional[str] = None, type: Optional[str] = None, 
                             q: Optional[str] = None, tag: Optional[str] = None) -> Generator[Transaction, None, None]:
         """
-        다중 조건(기간, 카테고리, 유형, 메모 검색어, 태그)을 만족하는 거래를 필터링하여 최신순 스트리밍 반환
+        다중 조건(기간, 카테고리, 유형, 메모 검색어, 태그)을 만족하는 거래를
+        조건 푸시다운(Predicate Pushdown)으로 1차 필터링 후 외부 정렬하여 최신순 스트리밍 반환 (메모리 O(1))
         """
         if from_date: self._validate_date(from_date)
         if to_date: self._validate_date(to_date)
@@ -175,54 +182,73 @@ class BudgetService:
         if type:
             normalized_type = self._validate_type(type)
             
-        transactions = sorted(list(self.repo.get_transactions()), key=lambda x: (x.date, x.id), reverse=True)
-        for tx in transactions:
-            if from_date and tx.date < from_date: continue
-            if to_date and tx.date > to_date: continue
-            if category and tx.category.lower() != category.lower(): continue
-            if normalized_type and tx.type != normalized_type: continue
-            if q and q.lower() not in tx.memo.lower(): continue
-            if tag and tag not in tx.tags: continue
-            yield tx
+        def _matches(tx: Transaction) -> bool:
+            if from_date and tx.date < from_date: return False
+            if to_date and tx.date > to_date: return False
+            if category and tx.category.lower() != category.lower(): return False
+            if normalized_type and tx.type != normalized_type: return False
+            if q and q.lower() not in tx.memo.lower(): return False
+            if tag and tag not in tx.tags: return False
+            return True
+
+        filtered_stream = (tx for tx in self.repo.get_transactions() if _matches(tx))
+        yield from external_merge_sort(
+            filtered_stream,
+            key=lambda x: (x.date, x.id),
+            reverse=True,
+            deserializer=lambda d: Transaction(**d)
+        )
             
     @measure_execution_time
     @log_action
     def update_transaction(self, id: str, date: Optional[str] = None, type: Optional[str] = None, 
                            category: Optional[str] = None, amount: Optional[int] = None, 
                            memo: Optional[str] = None, tags: Optional[List[str]] = None) -> Transaction:
-        """기존 거래 내역의 특정 필드만 선택적으로 수정"""
-        transactions = list(self.repo.get_transactions())
-        target = next((tx for tx in transactions if tx.id == id), None)
-        if not target:
-            raise NotFoundError(f"ID '{id}'에 해당하는 거래를 찾을 수 없습니다.", "list 명령어로 올바른 거래 ID를 확인하세요.")
-            
+        """기존 거래 내역의 특정 필드만 선택적으로 수정 (전체 메모리 로드 없이 스트리밍 갱신)"""
         if date: 
             self._validate_date(date)
-            target.date = date
-        if type: 
-            target.type = self._validate_type(type)
+        validated_type = self._validate_type(type) if type else None
         if category: 
             self._validate_category(category)
-            target.category = category
         if amount is not None: 
             self._validate_amount(amount)
-            target.amount = amount
-        if memo is not None: target.memo = memo
-        if tags is not None: target.tags = tags
+
+        updated_tx: Optional[Transaction] = None
+
+        def _updater(tx: Transaction) -> Transaction:
+            nonlocal updated_tx
+            if tx.id == id:
+                if date: tx.date = date
+                if validated_type: tx.type = validated_type
+                if category: tx.category = category
+                if amount is not None: tx.amount = amount
+                if memo is not None: tx.memo = memo
+                if tags is not None: tx.tags = tags
+                updated_tx = tx
+            return tx
+
+        self.repo.stream_rewrite_transactions(_updater)
+        if updated_tx is None:
+            raise NotFoundError(f"ID '{id}'에 해당하는 거래를 찾을 수 없습니다.", "list 명령어로 올바른 거래 ID를 확인하세요.")
             
-        self.repo.save_transactions(transactions)
-        return target
+        return updated_tx
         
     @measure_execution_time
     @log_action
     def delete_transaction(self, id: str) -> None:
-        """거래 ID 기반 특정 거래 삭제"""
-        transactions = list(self.repo.get_transactions())
-        initial_len = len(transactions)
-        transactions = [tx for tx in transactions if tx.id != id]
-        if len(transactions) == initial_len:
+        """거래 ID 기반 특정 거래 삭제 (전체 메모리 로드 없이 스트리밍 삭제)"""
+        deleted = False
+
+        def _deleter(tx: Transaction) -> Optional[Transaction]:
+            nonlocal deleted
+            if tx.id == id:
+                deleted = True
+                return None
+            return tx
+
+        self.repo.stream_rewrite_transactions(_deleter)
+        if not deleted:
             raise NotFoundError(f"ID '{id}'에 해당하는 거래를 찾을 수 없습니다.", "list 명령어로 올바른 거래 ID를 확인하세요.")
-        self.repo.save_transactions(transactions)
 
     @measure_execution_time
     @log_action
