@@ -111,6 +111,21 @@ class TestBudgetApp(unittest.TestCase):
         self.svc.remove_category("custom_hobby")
         self.assertNotIn("custom_hobby", [c.name for c in self.svc.list_categories()])
 
+        # 빈 파일(0바이트) 또는 공백 파일로 초기화되어 있을 때도 자동 시드되는지 검증
+        with open(self.repo.categories_path, "w", encoding="utf-8") as f:
+            f.write("")  # 0바이트 빈 파일
+        cats_empty = [c.name for c in self.svc.list_categories()]
+        self.assertIn("food", cats_empty)
+        self.assertIn("transport", cats_empty)
+        self.assertEqual(len(cats_empty), 8)
+
+        # 공백만 있는 파일일 때도 자동 시드되는지 검증
+        with open(self.repo.categories_path, "w", encoding="utf-8") as f:
+            f.write("   \n\n  \n")
+        cats_blank = [c.name for c in self.svc.list_categories()]
+        self.assertIn("food", cats_blank)
+        self.assertEqual(len(cats_blank), 8)
+
     def test_category_replacement_policy(self):
         """사용 중인 카테고리 삭제 시 대체 카테고리(--replace-with) 이전 마이그레이션 정책 검증"""
         self.svc.add_category("old_cat")

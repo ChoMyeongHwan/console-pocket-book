@@ -59,8 +59,28 @@ class Repository:
             os.makedirs(self.data_dir)
             
     def _init_categories(self) -> None:
-        """카테고리 파일이 없으면 기본 8개 카테고리를 영구 저장소에 자동 등록"""
+        """
+        카테고리 파일이 없거나, 파일 크기가 0바이트이거나,
+        유효한 카테고리 레코드가 비어있는 경우 기본 8개 카테고리를 영구 저장소에 자동 등록(Seed)합니다.
+        """
+        needs_seed = False
         if not os.path.exists(self.categories_path):
+            needs_seed = True
+        elif os.path.getsize(self.categories_path) == 0:
+            needs_seed = True
+        else:
+            # 파일은 존재하나 공백/개행만 있거나 유효한 레코드가 0개인 경우 방어
+            try:
+                has_any = False
+                for _ in self._read_jsonl(self.categories_path):
+                    has_any = True
+                    break
+                if not has_any:
+                    needs_seed = True
+            except Exception:
+                needs_seed = True
+
+        if needs_seed:
             self.save_categories([Category(name=c, is_default=True) for c in DEFAULT_CATEGORIES])
 
     def _read_jsonl(self, path: str) -> Generator[Dict[str, Any], None, None]:
@@ -161,7 +181,8 @@ class Repository:
         self._write_jsonl_atomic(self.transactions_path, [t.__dict__ for t in transactions])
         
     def get_categories(self) -> Generator[Category, None, None]:
-        """저장된 카테고리를 Category 객체 스트림으로 반환"""
+        """저장된 카테고리를 Category 객체 스트림으로 반환 (비어있을 시 자동 시드)"""
+        self._init_categories()
         for data in self._read_jsonl(self.categories_path):
             yield Category(**data)
             
