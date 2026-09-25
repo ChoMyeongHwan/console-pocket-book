@@ -65,6 +65,10 @@ class TestBudgetApp(unittest.TestCase):
             self.svc.add_transaction("2026-9-24", "expense", "food", 10000, "점심", [])
         with self.assertRaises(ValidationError):
             self.svc.add_transaction("2024-13-40", "expense", "food", 10000, "점심", [])
+        with self.assertRaises(ValidationError):
+            self.svc.add_transaction("2024-02-30", "expense", "food", 10000, "점심", [])
+        with self.assertRaises(ValidationError):
+            self.svc.add_transaction("2023-02-29", "expense", "food", 10000, "점심", [])
         
         # 타입 오류
         with self.assertRaises(ValidationError):
