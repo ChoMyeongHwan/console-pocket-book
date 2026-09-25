@@ -78,15 +78,15 @@ def measure_time(func):
 ```mermaid
 sequenceDiagram
     participant Caller
-    participant Decorator (Wrapper)
-    participant Original Function
+    participant Decorator as Decorator (Wrapper)
+    participant Original as Original Function
     
-    Caller->>Decorator (Wrapper): 함수 호출
-    Note right of Decorator (Wrapper): 공통 관심사 실행 (예: 타이머 시작)
-    Decorator (Wrapper)->>Original Function: 실제 로직 호출
-    Original Function-->>Decorator (Wrapper): 결과 반환
-    Note right of Decorator (Wrapper): 공통 관심사 실행 (예: 로깅, 예외 처리)
-    Decorator (Wrapper)-->>Caller: 최종 결과 반환
+    Caller->>Decorator: 함수 호출
+    Note right of Decorator: 공통 관심사 실행 (예: 타이머 시작)
+    Decorator->>Original: 실제 로직 호출
+    Original-->>Decorator: 결과 반환
+    Note right of Decorator: 공통 관심사 실행 (예: 로깅, 예외 처리)
+    Decorator-->>Caller: 최종 결과 반환
 ```
 
 ---

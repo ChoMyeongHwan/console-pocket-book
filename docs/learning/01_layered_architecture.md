@@ -38,13 +38,13 @@
 
 ```mermaid
 flowchart TD
-    User([User]) --> CLI[CLI Layer\nbudget_app/cli.py]
-    CLI --> Service[Service Layer\nbudget_app/services.py]
-    Service --> Sort[Sort Utils\nbudget_app/sort_utils.py]
-    Service --> Repo[Repository Layer\nbudget_app/repository.py]
-    Repo --> Data[(Data Files\n./data/*.jsonl)]
+    User(["User"]) --> CLI["CLI Layer<br/>budget_app/cli.py"]
+    CLI --> Service["Service Layer<br/>budget_app/services.py"]
+    Service --> Sort["Sort Utils<br/>budget_app/sort_utils.py"]
+    Service --> Repo["Repository Layer<br/>budget_app/repository.py"]
+    Repo --> Data[("Data Files<br/>./data/*.jsonl")]
     
-    Models[Models\nbudget_app/models.py] -.-> CLI
+    Models["Models<br/>budget_app/models.py"] -.-> CLI
     Models -.-> Service
     Models -.-> Repo
 ```

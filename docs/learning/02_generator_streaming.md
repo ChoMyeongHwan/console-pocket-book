@@ -58,10 +58,10 @@ def stream_transactions():
 
 ```mermaid
 flowchart LR
-    File[(JSONL File)] -->|Line by Line| Repo[Repository\n`yield transaction`]
-    Repo -->|Stream| Pushdown[Predicate Pushdown\n`filter condition`]
-    Pushdown -->|Chunk stream| ExtSort[External Merge Sort\n`heapq.merge()`]
-    ExtSort -->|Sorted stream| CLI[CLI Output Stream\n`TX-XXXXXX | ...`]
+    File[("JSONL File")] -->|"Line by Line"| Repo["Repository<br/>yield transaction"]
+    Repo -->|"Stream"| Pushdown["Predicate Pushdown<br/>filter condition"]
+    Pushdown -->|"Chunk stream"| ExtSort["External Merge Sort<br/>heapq.merge()"]
+    ExtSort -->|"Sorted stream"| CLI["CLI Output Stream<br/>TX-XXXXXX"]
 ```
 
 ---
