@@ -29,7 +29,7 @@ def stream_transactions():
 
 ---
 
-## 3. JSONL vs CSV 영구 저장 포맷 비교 및 선정 근거 (FAIL #14 보완)
+## 3. JSONL vs CSV 영구 저장 포맷 비교 및 선정 근거
 
 | 비교 항목 | JSONL (JSON Lines) | CSV (Comma-Separated Values) |
 |---|---|---|
@@ -40,14 +40,14 @@ def stream_transactions():
 
 ---
 
-## 4. 제너레이터 파일 닫힘(Close) 보장 메커니즘 (PASS #11 보완)
+## 4. 제너레이터 파일 닫힘(Close) 보장 메커니즘
 
 ### 4.1 안전한 파일 디스크립터 닫힘 원리
 `repository.py`의 `_read_jsonl`은 `with open(...) as f:` 컨텍스트 매니저 내부에서 `yield`를 호출합니다:
 1. 호출자가 제너레이터를 끝까지 순회하면 루프 종료 후 `with` 블록을 빠져나오며 파일이 자동으로 닫힙니다.
 2. 만약 호출자가 `break`를 걸거나 도중에 예외가 발생하여 제너레이터가 소멸(Garbage Collection)될 경우, 파이썬 인터프리터가 제너레이터 내부에 `GeneratorExit` 예외를 주입하여 `finally` 및 컨텍스트 매니저의 `__exit__`을 강제 호출합니다. 따라서 **어떤 예외 경로에서도 파일 디스크립터 누수가 발생하지 않습니다**.
 
-### 4.2 소비자 주의사항 및 외부 정렬(External Merge Sort) 연동 (FAIL #11 보완 완결)
+### 4.2 소비자 주의사항 및 외부 정렬(External Merge Sort) 스트리밍 연동
 - `list(repo.get_transactions())`처럼 전체 데이터를 메모리에 적재한 뒤 정렬하면 제너레이터의 메모리 절약(`O(1)`) 이점이 상실됩니다.
 - 본 프로젝트에서는 `budget_app/sort_utils.py`의 `external_merge_sort()`를 통해 청크 단위 분할 및 `heapq.merge` 기반 K-way 병합 스트리밍을 구현했습니다.
 - 따라서 `list` 및 `search` 명령어를 실행할 때도 인메모리 전체 로드(`list()`) 없이, `O(K)`의 극소 메모리만을 유지하며 정렬된 결과를 파이프라인으로 스트리밍(yield)합니다.

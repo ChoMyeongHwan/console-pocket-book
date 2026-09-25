@@ -53,7 +53,7 @@ classDiagram
 
 ---
 
-## 4. POSIX Exit Code 매핑 표 (PASS #7 보완)
+## 4. POSIX Exit Code 매핑 표
 
 CLI 도구는 스크립트나 CI/CD 파이프라인에서 자동화 목적으로 자주 사용됩니다. 이때 오류의 원인을 기계(스크립트)가 식별할 수 있도록 세분화된 exit code를 반환합니다.
 

@@ -6,7 +6,7 @@
 
 ---
 
-## 2. 파일별 책임 분류 및 모듈 매핑 (PASS #8 보완)
+## 2. 파일별 책임 분류 및 모듈 매핑
 
 단일 책임 원칙(SRP)에 따라 각 파이썬 모듈의 책임을 명확히 규정하였습니다.
 
@@ -16,13 +16,14 @@
 | [`budget_app/cli.py`](../../budget_app/cli.py) | Presentation | 커맨드 라인 인자 파싱(`argparse`), 대화형 입력 프롬프트 및 화면 포맷팅 전담 |
 | [`budget_app/services.py`](../../budget_app/services.py) | Business Logic | 거래 CRUD, 예산 분석, 카테고리 무결성, CSV 임포트/익스포트 등 비즈니스 규칙 총괄 |
 | [`budget_app/repository.py`](../../budget_app/repository.py) | Persistence | 3대 영구 데이터 파일 I/O, `yield` 스트리밍 및 원자적 교체(`atomic save`) 전담 |
+| [`budget_app/sort_utils.py`](../../budget_app/sort_utils.py) | Algorithm / Stream | 외부 정렬(External Merge Sort) 및 `heapq.merge` 기반 K-way 병합 스트리밍 전담 |
 | [`budget_app/models.py`](../../budget_app/models.py) | Domain Model | `dataclass` 기반 거래/카테고리/예산 불변 조건 및 고유 식별자(ID) 채번 정의 |
 | [`budget_app/exceptions.py`](../../budget_app/exceptions.py) | Exception | 세분화된 POSIX 종료 코드(1, 2, 3, 4)와 원인/힌트를 갖춘 비즈니스 예외 계층 |
 | [`budget_app/decorators.py`](../../budget_app/decorators.py) | Cross-Cutting | 스택트레이스 숨김, 디버그 모드 토글, 시간 측정, 감사 추적 등 횡단 관심사 래핑 |
 
 ---
 
-## 3. 영구 저장 파일 3종 및 데이터 보존 (PASS #2 보완)
+## 3. 영구 저장 파일 3종 및 데이터 보존
 
 저장소 계층은 비즈니스 도메인에 따라 3개 이상의 물리 파일로 데이터를 분리하여 보존합니다:
 - `./data/transactions.jsonl`: 거래 내역 영구 보존
@@ -39,6 +40,7 @@
 flowchart TD
     User([User]) --> CLI[CLI Layer\nbudget_app/cli.py]
     CLI --> Service[Service Layer\nbudget_app/services.py]
+    Service --> Sort[Sort Utils\nbudget_app/sort_utils.py]
     Service --> Repo[Repository Layer\nbudget_app/repository.py]
     Repo --> Data[(Data Files\n./data/*.jsonl)]
     

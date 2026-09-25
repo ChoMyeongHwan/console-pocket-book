@@ -34,7 +34,7 @@ def add_transaction(tx):
 
 ---
 
-## 3. `budget_app`의 3대 데코레이터 동작 및 부작용(Side Effects) (PASS #12 보완)
+## 3. `budget_app`의 3대 데코레이터 동작 및 부작용(Side Effects)
 
 | 데코레이터 | 핵심 동작 | 부작용 (Side Effects) |
 |---|---|---|
@@ -44,7 +44,7 @@ def add_transaction(tx):
 
 ---
 
-## 4. 개발용/운영용 디버그 토글 (PASS #6 보완)
+## 4. 개발용/운영용 디버그 토글
 
 기본적으로는 일반 사용자를 위해 스택트레이스를 숨기지만, 개발자가 버그를 분석할 수 있도록 **디버그 모드 토글** 을 지원합니다:
 - CLI 옵션: `python -m budget_app --debug <command>`

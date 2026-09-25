@@ -43,30 +43,38 @@ flowchart TD
   ```
 * **예상 화면 출력**:
   ```text
-  test_add_transaction (test_budget_app.TestBudgetApp)
+  test_add_transaction (test_budget_app.TestBudgetApp.test_add_transaction)
   거래 추가 및 영문/한글 타입 지원, 최신순 정렬 검증 ... ok
-  test_budget_and_summary (test_budget_app.TestBudgetApp)
+  test_budget_and_summary (test_budget_app.TestBudgetApp.test_budget_and_summary)
   월별 요약 통계 계산 및 예산 초과 경고 산출 검증 ... ok
-  test_category_management (test_budget_app.TestBudgetApp)
+  test_category_management (test_budget_app.TestBudgetApp.test_category_management)
   카테고리 기본 생성, 추가, 중복 차단, 사용 중 카테고리 삭제 차단 검증 ... ok
-  test_csv_export_import (test_budget_app.TestBudgetApp)
-  CSV 내보내기/가져오기 왕복 검증 및 필수 조건 누락 예외 검증 ... ok
-  test_delete_transaction (test_budget_app.TestBudgetApp)
+  test_category_replacement_policy (test_budget_app.TestBudgetApp.test_category_replacement_policy)
+  사용 중인 카테고리 삭제 시 대체 카테고리(--replace-with) 이전 마이그레이션 정책 검증 ... ok
+  test_csv_export_import_and_partial_skip_report (test_budget_app.TestBudgetApp.test_csv_export_import_and_partial_skip_report)
+  CSV 왕복 및 오류 행 부분 임포트(스킵 사유 상세 리포트) 검증 ... ok
+  test_delete_transaction (test_budget_app.TestBudgetApp.test_delete_transaction)
   거래 삭제 및 존재하지 않는 ID 삭제 시 NotFoundError 발생 검증 ... ok
-  test_search_transactions (test_budget_app.TestBudgetApp)
+  test_exit_codes_mapping (test_budget_app.TestBudgetApp.test_exit_codes_mapping)
+  주요 비즈니스 예외별 POSIX exit code 매핑 검증 ... ok
+  test_external_merge_sort_streaming (test_budget_app.TestBudgetApp.test_external_merge_sort_streaming)
+  외부 정렬(External Merge Sort) 청크 분할, K-way 병합, O(1) 제너레이터 스트리밍 및 파일 정리 검증 ... ok
+  test_search_transactions (test_budget_app.TestBudgetApp.test_search_transactions)
   키워드, 날짜 범위, 타입, 태그 조건 검색 검증 ... ok
-  test_update_transaction (test_budget_app.TestBudgetApp)
+  test_update_transaction (test_budget_app.TestBudgetApp.test_update_transaction)
   거래 수정 및 존재하지 않는 ID 수정 시 NotFoundError 발생 검증 ... ok
-  test_validation_errors (test_budget_app.TestBudgetApp)
+  test_validation_errors (test_budget_app.TestBudgetApp.test_validation_errors)
   잘못된 입력값(날짜 형식 오류, 유효하지 않은 타입, 음수 금액, 미등록 카테고리) 예외 검증 ... ok
+  test_zero_load_streaming_in_services (test_budget_app.TestBudgetApp.test_zero_load_streaming_in_services)
+  list_transactions 및 search_transactions가 제너레이터 스트림을 반환하며 메모리 O(1)로 동작함을 검증 ... ok
 
   ----------------------------------------------------------------------
-  Ran 8 tests in 0.026s
+  Ran 12 tests in 0.030s
 
   OK
   ```
 * **🗣️ 발표 멘트**:
-  > *"가장 먼저 작성된 단위 테스트 8종을 실행하겠습니다. 외부 라이브러리 없이 순수 파이썬 `unittest`로 작성되었으며, 격리된 임시 폴더에서 100% 정상 통과함을 확인할 수 있습니다."*
+  > *"가장 먼저 작성된 단위 테스트 12종을 실행하겠습니다. 외부 라이브러리 없이 순수 파이썬 `unittest`로 작성되었으며, 격리된 임시 폴더에서 10대 핵심 기능과 외부 정렬, 스트리밍, 예외 처리까지 100% 정상 통과함을 확인할 수 있습니다."*
 
 ---
 
