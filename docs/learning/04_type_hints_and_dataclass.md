@@ -1,7 +1,7 @@
 # 04. 타입 힌트와 Dataclass
 
 ## 1. 개요
-Python 3.5부터 도입된 **타입 힌트(Type Hints)** 와 3.7부터 도입된 **Dataclass**는 모던 파이썬 개발의 핵심입니다.
+Python 3.5부터 도입된 **타입 힌트(Type Hints)** 와 3.7부터 도입된 **Dataclass** 는 모던 파이썬 개발의 핵심입니다.
 `budget_app`은 딕셔너리(`dict`) 대신 강력한 타입 힌트와 결합된 Dataclass를 사용하여 안정적인 **데이터 계약(Data Contract)** 을 설계했습니다.
 
 ## 2. 딕셔너리(Dict) 대비 Dataclass의 장점

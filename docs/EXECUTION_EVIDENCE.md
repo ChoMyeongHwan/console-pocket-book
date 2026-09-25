@@ -51,9 +51,9 @@ $ echo $?
 
 ```bash
 $ python3 -m budget_app list --limit 3
-TX-0D1D82 | 2024-01-20 | income | salary | 3000000 | 1월 급여
-TX-D1C6F4 | 2024-01-15 | expense | food | 15000 | 점심 식사
-TX-7F7150 | 2024-01-14 | expense | food | 12000 | 외식
+TX-010013 | 2024-01-31 | expense | food | 25000 | 카페 음료 및 디저트
+TX-010012 | 2024-01-30 | expense | transport | 25000 | 야근 후 택시 귀가
+TX-010011 | 2024-01-28 | expense | food | 55000 | 주말 가족 외식
 ```
 * **결과 입증**: 거래 일자 기준 최신순(내림차순) 정렬되어 출력되며, `--limit` 건수 제한이 적용됨. 내부적으로 `yield` 제너레이터 스트리밍 소비.
 
@@ -63,14 +63,15 @@ TX-7F7150 | 2024-01-14 | expense | food | 12000 | 외식
 
 #### 3-1. 카테고리 및 메모 키워드 검색
 ```bash
-$ python3 -m budget_app search --category food --q 점심
-TX-D1C6F4 | 2024-01-15 | expense | food | 15000 | 점심 식사
+$ python3 -m budget_app search --category food --q 장보기
+TX-010003 | 2024-01-12 | expense | food | 125000 | 주말 이마트 장보기
 ```
 
 #### 3-2. 수입 유형만 검색
 ```bash
 $ python3 -m budget_app search --type income
-TX-0D1D82 | 2024-01-20 | income | salary | 3000000 | 1월 급여
+TX-010007 | 2024-01-20 | income | etc | 50000 | 중고 물품 판매 대금
+TX-010002 | 2024-01-10 | income | salary | 3200000 | 1월 급여 입금
 ```
 * **결과 입증**: `--category`, `--type`, `--q`, `--from`, `--to`, `--tag` 조건이 결합되어 실시간 필터링됨.
 
@@ -81,13 +82,15 @@ TX-0D1D82 | 2024-01-20 | income | salary | 3000000 | 1월 급여
 #### 4-1. 내역이 존재하는 월 조회
 ```bash
 $ python3 -m budget_app summary --month 2024-01 --top 3
-총 수입: 3000000원
-총 지출: 15000원
-잔액: 2985000원
-예산: 500000원 (사용률 3.0%)
+총 수입: 3250000원
+총 지출: 1230000원
+잔액: 2020000원
+예산: 1500000원 (사용률 82.0%) [주의: 예산 80% 이상 소진]
 
-지출 TOP 1
-1) food 15000원
+지출 TOP 3
+1) shopping 450000원
+2) living 400000원
+3) food 220000원
 ```
 
 #### 4-2. 내역이 없는 월 조회
@@ -103,22 +106,23 @@ $ python3 -m budget_app summary --month 2024-02
 
 #### 5-1. 목표 예산 저장
 ```bash
-$ python3 -m budget_app budget set --month 2024-01 --amount 500000
-[저장 완료] 2024-01 예산 500000원
+$ python3 -m budget_app budget set --month 2024-01 --amount 1500000
+[저장 완료] 2024-01 예산 1500000원
 ```
 
 #### 5-2. 예산 초과 시 경고 출력
-예산 50,000원 설정 상태에서 지출 55,000원 발생 시:
+목표 예산 1,000,000원 설정 상태에서 지출 1,230,000원 발생 시:
 ```bash
-$ python3 -m budget_app summary --month 2024-09
-총 수입: 100000원
-총 지출: 55000원
-잔액: 45000원
-예산: 500000원 (사용률 110.0%) [경고: 예산 초과!]
+$ python3 -m budget_app summary --month 2024-01
+총 수입: 3250000원
+총 지출: 1230000원
+잔액: 2020000원
+예산: 1000000원 (사용률 123.0%) [경고: 예산 초과!]
 
-지출 TOP 2
-1) food 30000원
-2) transport 25000원
+지출 TOP 3
+1) shopping 450000원
+2) living 400000원
+3) food 220000원
 ```
 * **결과 입증**: 예산 데이터가 `budgets.jsonl`에 영구 보존되고, 사용률 100% 초과 시 `[경고: 예산 초과!]` 메시지가 활성화됨.
 
@@ -164,11 +168,11 @@ $ python3 -m budget_app category remove travel --replace-with food
 ### 7. 거래 수정 (update) - 옵션 기반 부분 수정
 
 ```bash
-$ python3 -m budget_app update --id TX-D1C6F4 --amount 20000 --memo "저녁 회식으로 변경"
-[수정 완료] id=TX-D1C6F4
+$ python3 -m budget_app update --id TX-010013 --amount 30000 --memo "카페 음료 및 조각케이크 세트"
+[수정 완료] id=TX-010013
 
 $ python3 -m budget_app list --limit 1
-TX-D1C6F4 | 2024-01-15 | expense | food | 20000 | 저녁 회식으로 변경
+TX-010013 | 2024-01-31 | expense | food | 30000 | 카페 음료 및 조각케이크 세트
 ```
 * **결과 입증**: 금액과 메모가 원자적으로 갱신되었음을 재조회를 통해 확인.
 
@@ -178,8 +182,8 @@ TX-D1C6F4 | 2024-01-15 | expense | food | 20000 | 저녁 회식으로 변경
 
 #### 8-1. 정상 삭제
 ```bash
-$ python3 -m budget_app delete --id TX-D1C6F4
-[삭제 완료] id=TX-D1C6F4
+$ python3 -m budget_app delete --id TX-010013
+[삭제 완료] id=TX-010013
 ```
 
 #### 8-2. 존재하지 않는 ID 삭제 시도
@@ -198,11 +202,13 @@ $ echo $?
 
 ```bash
 $ python3 -m budget_app export --out export.csv --month 2024-01
-[완료] export.csv (1 records)
+[완료] export.csv (12 records)
 
-$ cat export.csv
+$ head -n 4 export.csv
 date,type,category,amount,memo,tags
-2024-01-20,income,salary,3000000,1월 급여,"salary,job"
+2024-01-30,expense,transport,25000,야근 후 택시 귀가,"교통,야근"
+2024-01-28,expense,food,55000,주말 가족 외식,"식비,외식"
+2024-01-26,expense,shopping,265000,온라인 쇼핑몰 생필품 및 전자기기,"쇼핑,생활"
 ```
 * **결과 입증**: UTF-8 헤더(`date,type,category,amount,memo,tags`)를 포함한 정합성 높은 CSV 생성 완료.
 
