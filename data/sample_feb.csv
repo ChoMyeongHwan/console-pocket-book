@@ -1,0 +1,5 @@
+date,type,category,amount,memo,tags
+2024-02-01,expense,food,12000,김치찌개 점심,"식비,점심"
+2024-02-35,expense,food,8000,날짜오타,오류
+2024-02-03,expense,food,-5000,음수금액,오류
+2024-02-05,income,salary,3500000,2월 급여,급여

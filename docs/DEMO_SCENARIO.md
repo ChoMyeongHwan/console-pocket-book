@@ -312,13 +312,14 @@ PDF 10페이지에 명시된 **스택트레이스 숨김 + 원인과 힌트 제�
 
 ### Step 9. CSV 내보내기(export) 및 가져오기(import)
 
-과제 명세서의 고정 스키마(`date,type,category,amount,memo,tags`)를 준수하는지 확인합니다.
+과제 명세서(`b2-1.pdf`)의 표준 스키마(`date,type,category,amount,memo,tags`) 준수 여부와, 사전평가 항목 #16인 **Best-Effort 부분 임포트 및 오류 행 스킵 상세 리포트** 동작을 시연합니다.
 
-* **9-1. CSV 내보내기**:
+* **9-1. CSV 내보내기 (Export)**:
+  1월 가계부 데이터를 외부 교환용 표준 CSV 파일로 백업/추출합니다.
   ```bash
   python3 -m budget_app export --out backup_202401.csv --month 2024-01
   ```
-  * 출력: `[완료] backup_202401.csv (12 records)`
+  * 출력: `[완료] backup_202401.csv (13 records)`
 
 * **9-2. 생성된 CSV 파일 내용 검증**:
   ```bash
@@ -327,20 +328,42 @@ PDF 10페이지에 명시된 **스택트레이스 숨김 + 원인과 힌트 제�
   * 출력 예시:
     ```text
     date,type,category,amount,memo,tags
+    2024-01-31,expense,food,25000,카페 음료 및 디저트,"식비,카페"
     2024-01-30,expense,transport,25000,야근 후 택시 귀가,"교통,야근"
     2024-01-28,expense,food,55000,주말 가족 외식,"식비,외식"
     2024-01-26,expense,shopping,265000,온라인 쇼핑몰 생필품 및 전자기기,"쇼핑,생활"
-    2024-01-25,expense,medical,25000,이비인후과 진료 및 약국,"병원,건강"
+    ```
+  > 💡 **내보내기 특징 설명**: 내부 영구 저장소(`transactions.jsonl`)의 고유 ID(`TX-XXXXXX`)는 외부 규격에 맞게 제외되고, 6대 표준 헤더와 UTF-8 인코딩이 적용되어 엑셀 및 타 앱과 즉시 호환됩니다.
+
+* **9-3. CSV 가져오기 (Import) - 부분 임포트 및 오류 행 스킵 리포트 시연**:
+  방금 내보낸 파일을 그대로 다시 넣으면 1월 데이터가 중복되므로, **정상 데이터 2건과 오류 데이터 2건(날짜 오타, 음수 금액)이 섞인 외부 신규 데이터 샘플(`data/sample_feb.csv`)** 을 가져옵니다.
+  ```bash
+  # 샘플 파일 내용 확인
+  cat data/sample_feb.csv
+  ```
+  * 샘플 파일 내용:
+    ```text
+    date,type,category,amount,memo,tags
+    2024-02-01,expense,food,12000,김치찌개 점심,"식비,점심"
+    2024-02-35,expense,food,8000,날짜오타,오류
+    2024-02-03,expense,food,-5000,음수금액,오류
+    2024-02-05,income,salary,3500000,2월 급여,급여
     ```
 
-* **9-3. CSV 가져오기**:
   ```bash
-  python3 -m budget_app import --from backup_202401.csv
+  # 가져오기 실행
+  python3 -m budget_app import --from data/sample_feb.csv
   ```
-  * 출력: `[완료] imported=12, skipped=0`
+  * **예상 화면 출력**:
+    ```text
+    [완료] imported=2, skipped=2
+    [스킵 상세 리포트]
+      - 3행: 날짜 형식이 올바르지 않습니다 (YYYY-MM-DD).
+      - 4행: 금액은 양의 정수여야 합니다.
+    ```
 
 * **🗣️ 발표 멘트**:
-  > *"외부 시스템과 데이터를 주고받기 위한 CSV 표준 스키마를 만족하며, 누락되거나 오류가 있는 행은 skipped 건수로 정확히 집계하여 안전하게 가져옵니다."*
+  > *"외부 시스템과 데이터를 주고받기 위한 CSV 표준 스키마를 만족하며, 가져오기 시 잘못된 행이 있더라도 전체를 롤백하지 않고 정상 데이터는 신규 ID를 채번하여 즉시 등록하고, 오류 행은 정확한 행 번호와 원인을 리포트하는 Best-Effort 부분 임포트 정책을 완벽히 지원합니다."*
 
 ---
 

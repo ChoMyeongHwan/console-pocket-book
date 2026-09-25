@@ -43,6 +43,7 @@ htmlcov/
 # Keep data directory structure if needed
 data/*.jsonl
 data/*.csv
+!data/sample_feb.csv
 data/temp_*
 
 # Assignment & Specification Docs (Private)
