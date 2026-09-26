@@ -51,6 +51,8 @@ flowchart TD
   카테고리 기본 생성, 추가, 중복 차단, 사용 중 카테고리 삭제 차단 검증 ... ok
   test_category_replacement_policy (test_budget_app.TestBudgetApp.test_category_replacement_policy)
   사용 중인 카테고리 삭제 시 대체 카테고리(--replace-with) 이전 마이그레이션 정책 검증 ... ok
+  test_cli_parent_and_subparsers_full_pipeline (test_budget_app.TestBudgetApp.test_cli_parent_and_subparsers_full_pipeline)
+  cli.py 부모 파서(--data-dir, --debug 상속) 및 10대 서브파서/중첩 서브파서 파싱 동작 검증 ... ok
   test_csv_export_import_and_partial_skip_report (test_budget_app.TestBudgetApp.test_csv_export_import_and_partial_skip_report)
   CSV 왕복 및 오류 행 부분 임포트(스킵 사유 상세 리포트) 검증 ... ok
   test_delete_transaction (test_budget_app.TestBudgetApp.test_delete_transaction)
@@ -69,12 +71,12 @@ flowchart TD
   list_transactions 및 search_transactions가 제너레이터 스트림을 반환하며 메모리 O(1)로 동작함을 검증 ... ok
 
   ----------------------------------------------------------------------
-  Ran 12 tests in 0.030s
+  Ran 13 tests in 0.035s
 
   OK
   ```
 * **🗣️ 발표 멘트**:
-  > *"가장 먼저 작성된 단위 테스트 12종을 실행하겠습니다. 외부 라이브러리 없이 순수 파이썬 `unittest`로 작성되었으며, 격리된 임시 폴더에서 10대 핵심 기능과 외부 정렬, 스트리밍, 예외 처리까지 100% 정상 통과함을 확인할 수 있습니다."*
+  > *"가장 먼저 작성된 단위 테스트 13종을 실행하겠습니다. 외부 라이브러리 없이 순수 파이썬 `unittest`로 작성되었으며, 격리된 임시 폴더에서 10대 핵심 기능과 외부 정렬, 스트리밍, CLI 파서 상속 및 예외 처리까지 100% 정상 통과함을 확인할 수 있습니다."*
 
 ---
 

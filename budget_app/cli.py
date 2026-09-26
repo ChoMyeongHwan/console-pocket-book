@@ -8,9 +8,10 @@
 2. 서브파서 (Subparsers - add_subparsers):
    - `git commit`, `git push` 처럼 하나의 프로그램 안에서 여러 하위 명령어(`add`, `list`, `summary`, `budget` 등)를
      분기 처리할 수 있게 해주는 구조입니다.
-3. 부모 파서 (Parent Parser - parents=[parent_parser]):
+3. 부모 파서 (Parent Parser - parents=[parent_parser] 및 default=argparse.SUPPRESS):
    - 모든 하위 명령어에서 공통으로 쓸 옵션(`--data-dir`, `--debug`)을 한 번만 정의해두고,
      각 서브파서가 `parents=[parent_parser]`로 물려받게 함으로써 코드 중복을 제거합니다.
+   - 이때 서브파서의 기본값이 부모 파서에서 먼저 파싱된 옵션을 덮어쓰지 않도록 `default=argparse.SUPPRESS`를 적용하고 최종 파싱 후 폴백 기본값을 할당합니다.
 4. 예약어 피하기 (dest="from_date"):
    - 파이썬에서 `from`은 `from module import ...`에 사용되는 '예약어(Keyword)'이므로 변수명으로 쓸 수 없습니다.
    - 따라서 CLI 옵션은 리눅스 표준인 `--from`으로 받되, 파이썬 내부 변수명은 `dest="from_date"`로 안전하게 매핑합니다.
