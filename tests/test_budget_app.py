@@ -22,11 +22,14 @@ import unittest
 import os
 import tempfile
 import shutil
+from io import StringIO
+from unittest.mock import patch
 from budget_app.repository import Repository
 from budget_app.services import BudgetService
 from budget_app.models import Category
 from budget_app.exceptions import BudgetAppError, ValidationError, NotFoundError, DataStoreError
 from budget_app.sort_utils import external_merge_sort
+from budget_app.cli import main as cli_main
 
 class TestBudgetApp(unittest.TestCase):
     """가계부 애플리케이션의 10대 핵심 기능 및 예외 처리를 검증하는 테스트 케이스"""
@@ -330,6 +333,57 @@ class TestBudgetApp(unittest.TestCase):
         self.assertIsInstance(search_gen, types.GeneratorType)
         found = list(search_gen)
         self.assertEqual(len(found), 3)
+
+    def test_cli_parent_and_subparsers_full_pipeline(self):
+        """cli.py 부모 파서(--data-dir, --debug 상속) 및 10대 서브파서/중첩 서브파서 파싱 동작 검증"""
+        # 1. 부모 파서 옵션이 서브커맨드 앞에 위치할 때 상속 검증
+        with patch("sys.stdout", new_callable=StringIO) as mock_out:
+            cli_main(["--data-dir", self.test_dir, "category", "list"])
+            self.assertIn("- food", mock_out.getvalue())
+
+        # 2. 부모 파서 옵션이 서브커맨드 뒤에 위치할 때 상속 검증
+        with patch("sys.stdout", new_callable=StringIO) as mock_out:
+            cli_main(["category", "list", "--data-dir", self.test_dir])
+            self.assertIn("- salary", mock_out.getvalue())
+
+        # 3. 중첩 서브파서(budget set) 동작 검증
+        with patch("sys.stdout", new_callable=StringIO) as mock_out:
+            cli_main(["budget", "set", "--month", "2024-01", "--amount", "1500000", "--data-dir", self.test_dir])
+            self.assertIn("[저장 완료] 2024-01 예산 1500000원", mock_out.getvalue())
+
+        # 4. category add 및 remove 서브파서 검증
+        with patch("sys.stdout", new_callable=StringIO) as mock_out:
+            cli_main(["category", "add", "travel", "--data-dir", self.test_dir])
+            self.assertIn("[저장 완료] category=travel", mock_out.getvalue())
+        with patch("sys.stdout", new_callable=StringIO) as mock_out:
+            cli_main(["category", "remove", "travel", "--data-dir", self.test_dir])
+            self.assertIn("[삭제 완료] category=travel", mock_out.getvalue())
+
+        # 5. add (대화형) 및 list, search 서브파서 검증
+        user_inputs = ["2024-01-15", "expense", "food", "15000", "점심 식사", "식비"]
+        with patch("builtins.input", side_effect=user_inputs), patch("sys.stdout", new_callable=StringIO):
+            cli_main(["add", "--data-dir", self.test_dir])
+
+        with patch("sys.stdout", new_callable=StringIO) as mock_out:
+            cli_main(["list", "--limit", "1", "--data-dir", self.test_dir])
+            self.assertIn("2024-01-15 | expense | food | 15000 | 점심 식사", mock_out.getvalue())
+
+        with patch("sys.stdout", new_callable=StringIO) as mock_out:
+            cli_main(["search", "--category", "food", "--q", "점심", "--data-dir", self.test_dir])
+            self.assertIn("2024-01-15 | expense | food | 15000 | 점심 식사", mock_out.getvalue())
+
+        # 6. summary 서브파서 검증
+        with patch("sys.stdout", new_callable=StringIO) as mock_out:
+            cli_main(["summary", "--month", "2024-01", "--top", "3", "--data-dir", self.test_dir])
+            self.assertIn("총 지출: 15000원", mock_out.getvalue())
+
+        # 7. 필수 인자 누락 시 파서 에러 (SystemExit != 0) 검증
+        for invalid_argv in [["summary"], ["budget", "set"], ["update"], ["delete"], ["export"], ["import"]]:
+            with self.subTest(invalid_argv=invalid_argv):
+                with patch("sys.stderr", new_callable=StringIO):
+                    with self.assertRaises(SystemExit) as cm:
+                        cli_main(invalid_argv)
+                    self.assertNotEqual(cm.exception.code, 0)
 
 if __name__ == "__main__":
     unittest.main()

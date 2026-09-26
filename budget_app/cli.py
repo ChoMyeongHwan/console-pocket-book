@@ -40,9 +40,10 @@ def main(argv: Optional[List[str]] = None) -> None:
     명령줄 인자를 파싱하고 적절한 서비스 메서드를 호출하여 결과를 터미널에 출력합니다.
     """
     # 하위 모든 서브커맨드에서 공유할 부모 파서 정의 (공통 옵션: --data-dir, --debug)
+    # 서브파서의 기본값이 부모 파서에서 먼저 파싱된 옵션을 덮어쓰지 않도록 default=argparse.SUPPRESS 설정
     parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_argument("--data-dir", default="./data", help="데이터 저장 디렉터리 (기본값: ./data)")
-    parent_parser.add_argument("--debug", action="store_true", help="개발용 디버그 모드 활성화 (상세 오류/스택트레이스 노출)")
+    parent_parser.add_argument("--data-dir", default=argparse.SUPPRESS, help="데이터 저장 디렉터리 (기본값: ./data)")
+    parent_parser.add_argument("--debug", action="store_true", default=argparse.SUPPRESS, help="개발용 디버그 모드 활성화 (상세 오류/스택트레이스 노출)")
 
     # 메인 파서 생성
     parser = argparse.ArgumentParser(
@@ -123,6 +124,11 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     # 커맨드 라인 인자 파싱
     args = parser.parse_args(argv)
+    if not hasattr(args, "data_dir"):
+        args.data_dir = "./data"
+    if not hasattr(args, "debug"):
+        args.debug = False
+
     if not args.command:
         parser.print_help()
         sys.exit(0)
