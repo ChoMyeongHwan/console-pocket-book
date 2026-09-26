@@ -12,7 +12,7 @@
 
 | 파일명 | 계층 (Layer) | 핵심 책임 및 역할 요약 |
 |---|:---:|---|
-| [`budget_app/__main__.py`](../../budget_app/__main__.py) | Entry Point | `python -m budget_app` 실행 시 CLI 진입 함수를 기동하는 부트스트랩 모듈 |
+| [`budget_app/__main__.py`](../../budget_app/__main__.py) | Entry Point | `python3 -m budget_app` 실행 시 CLI 진입 함수를 기동하는 부트스트랩 모듈 |
 | [`budget_app/cli.py`](../../budget_app/cli.py) | Presentation | 커맨드 라인 인자 파싱(`argparse`), 대화형 입력 프롬프트 및 화면 포맷팅 전담 |
 | [`budget_app/services.py`](../../budget_app/services.py) | Business Logic | 거래 CRUD, 예산 분석, 카테고리 무결성, CSV 임포트/익스포트 등 비즈니스 규칙 총괄 |
 | [`budget_app/repository.py`](../../budget_app/repository.py) | Persistence | 3대 영구 데이터 파일 I/O, `yield` 스트리밍 및 원자적 교체(`atomic save`) 전담 |

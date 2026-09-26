@@ -46,6 +46,6 @@ flowchart TD
   3. 거래 데이터와 카테고리 데이터를 각각 원자적(`atomic replace`)으로 저장한 뒤 대상 카테고리를 삭제합니다.
 * **실행 예시**:
   ```bash
-  python -m budget_app category remove leisure --replace-with entertainment
+  python3 -m budget_app category remove leisure --replace-with entertainment
   # 출력: [삭제 및 이전 완료] category=leisure -> entertainment
   ```

@@ -36,7 +36,7 @@ flowchart TD
 
 ## 3. 스킵 상세 리포트 포맷 규격
 
-CLI에서 `python -m budget_app import --from <file.csv>` 실행 시, 스킵된 데이터가 존재하면 즉시 터미널에 구조화된 상세 리포트가 출력됩니다.
+CLI에서 `python3 -m budget_app import --from <file.csv>` 실행 시, 스킵된 데이터가 존재하면 즉시 터미널에 구조화된 상세 리포트가 출력됩니다.
 
 ### 3.1 콘솔 출력 규격 예시
 ```text
@@ -72,5 +72,5 @@ CLI에서 `python -m budget_app import --from <file.csv>` 실행 시, 스킵된 
 
 1. **로그 확인**: 출력된 `[스킵 상세 리포트]`의 행 번호와 실패 원인을 확인합니다.
 2. **CSV 파일 수정**: 오류가 발생한 해당 행의 값(예: 날짜 오타 수정, 미등록 카테고리 등록)을 보정합니다.
-3. **카테고리 사전 등록**: 오류 원인이 "존재하지 않는 category"인 경우, `python -m budget_app category add <name>` 명령어로 카테고리를 먼저 생성한 후 다시 임포트를 실행합니다.
+3. **카테고리 사전 등록**: 오류 원인이 "존재하지 않는 category"인 경우, `python3 -m budget_app category add <name>` 명령어로 카테고리를 먼저 생성한 후 다시 임포트를 실행합니다.
 4. **멱등성(Idempotency) 관리**: 이미 등록된 건은 고유 ID가 새로 발급되므로, 전체 재임포트 시에는 실패했던 행만 별도 CSV로 추출하여 가져오는 것을 권장합니다.

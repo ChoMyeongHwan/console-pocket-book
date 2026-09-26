@@ -13,7 +13,7 @@
 
 | 파일명 | 계층 (Layer) | 핵심 책임 및 역할 (1문장 요약) |
 |---|:---:|---|
-| [`budget_app/__main__.py`](./budget_app/__main__.py) | Entry Point | `python -m budget_app` 실행 시 CLI 메인 함수를 호출하는 모듈 진입점 |
+| [`budget_app/__main__.py`](./budget_app/__main__.py) | Entry Point | `python3 -m budget_app` 실행 시 CLI 메인 함수를 호출하는 모듈 진입점 |
 | [`budget_app/cli.py`](./budget_app/cli.py) | Presentation | `argparse` 기반 명령어 파싱, 대화형 콘솔 입출력 처리 및 포맷팅 |
 | [`budget_app/services.py`](./budget_app/services.py) | Business Logic | 거래 CRUD, 예산 분석, 카테고리 무결성, CSV 입출력 등 핵심 규칙 총괄 |
 | [`budget_app/repository.py`](./budget_app/repository.py) | Persistence | JSONL 파일 영구 저장, `yield` 제너레이터 스트리밍 및 원자적 교체 I/O |
@@ -60,14 +60,14 @@ console-pocket-book/
 
 ```bash
 # 기본 모듈 실행
-python -m budget_app <command> [options]
+python3 -m budget_app <command> [options]
 
 # 도움말 확인
-python -m budget_app --help
-python -m budget_app <command> --help
+python3 -m budget_app --help
+python3 -m budget_app <command> --help
 
 # 디버그 모드 실행 (상세 스택트레이스 및 에러 출력)
-python -m budget_app --debug <command> [options]
+python3 -m budget_app --debug <command> [options]
 # 또는 환경변수 설정: export BUDGET_APP_DEBUG=1
 ```
 
@@ -77,18 +77,18 @@ python -m budget_app --debug <command> [options]
 
 | 명령어 | 형식 | 설명 및 실행 예시 |
 |---|---|---|
-| **add** | 대화형 입력 | 날짜, 타입, 카테고리, 금액, 메모, 태그 순차 입력<br/>`python -m budget_app add` |
-| **list** | 옵션 인자 | 최신순 거래 목록 스트리밍 출력<br/>`python -m budget_app list --limit 5` |
-| **search** | 옵션 인자 | 다중 조건 필터링 검색<br/>`python -m budget_app search --category food --q 점심` |
-| **summary** | 옵션 인자 | 월별 재정 요약, TOP N 지출, 예산 경고<br/>`python -m budget_app summary --month 2024-01 --top 3` |
-| **budget set** | 옵션 인자 | 월별 목표 예산 저장<br/>`python -m budget_app budget set --month 2024-01 --amount 500000` |
-| **category list** | CLI 인자 | 등록된 카테고리 목록 조회<br/>`python -m budget_app category list` |
-| **category add** | 인자/대화형 | 신규 카테고리 등록<br/>`python -m budget_app category add travel` |
-| **category remove** | CLI 인자 | 카테고리 삭제 (대체 이전 옵션 지원)<br/>`python -m budget_app category remove travel --replace-with food` |
-| **update** | 옵션 인자 | 거래 필드 부분 수정<br/>`python -m budget_app update --id TX-000012 --amount 20000` |
-| **delete** | 옵션 인자 | 거래 삭제<br/>`python -m budget_app delete --id TX-000012` |
-| **export** | 옵션 인자 | 조건별 CSV 내보내기<br/>`python -m budget_app export --out export.csv --month 2024-01` |
-| **import** | 옵션 인자 | CSV 일괄 가져오기 (오류 행 스킵 상세 리포트)<br/>`python -m budget_app import --from import.csv` |
+| **add** | 대화형 입력 | 날짜, 타입, 카테고리, 금액, 메모, 태그 순차 입력<br/>`python3 -m budget_app add` |
+| **list** | 옵션 인자 | 최신순 거래 목록 스트리밍 출력<br/>`python3 -m budget_app list --limit 5` |
+| **search** | 옵션 인자 | 다중 조건 필터링 검색<br/>`python3 -m budget_app search --category food --q 점심` |
+| **summary** | 옵션 인자 | 월별 재정 요약, TOP N 지출, 예산 경고<br/>`python3 -m budget_app summary --month 2024-01 --top 3` |
+| **budget set** | 옵션 인자 | 월별 목표 예산 저장<br/>`python3 -m budget_app budget set --month 2024-01 --amount 500000` |
+| **category list** | CLI 인자 | 등록된 카테고리 목록 조회<br/>`python3 -m budget_app category list` |
+| **category add** | 인자/대화형 | 신규 카테고리 등록<br/>`python3 -m budget_app category add travel` |
+| **category remove** | CLI 인자 | 카테고리 삭제 (대체 이전 옵션 지원)<br/>`python3 -m budget_app category remove travel --replace-with food` |
+| **update** | 옵션 인자 | 거래 필드 부분 수정<br/>`python3 -m budget_app update --id TX-000012 --amount 20000` |
+| **delete** | 옵션 인자 | 거래 삭제<br/>`python3 -m budget_app delete --id TX-000012` |
+| **export** | 옵션 인자 | 조건별 CSV 내보내기<br/>`python3 -m budget_app export --out export.csv --month 2024-01` |
+| **import** | 옵션 인자 | CSV 일괄 가져오기 (오류 행 스킵 상세 리포트)<br/>`python3 -m budget_app import --from import.csv` |
 
 ---
 
